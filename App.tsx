@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { LogEntry, ChatMessage, LogData, MealAnalysis, Preferences } from './types';
+import type { LogEntry, ChatMessage, LogData, MealAnalysis, Preferences, PurineIntakeData } from './types';
 import Header from './components/Header';
 import DashboardPanel from './components/Dashboard';
 import CalendarPanel from './components/LogHistory';
@@ -58,6 +58,8 @@ const App: React.FC = () => {
   const [preferences, setPreferences] = useLocalStorage<Preferences>('goutcare-prefs', {
     weightUnit: 'kg',
     fluidUnit: 'ml',
+    dailyFluidGoal: 2500,
+    dailyPurineGoal: 150,
   });
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
@@ -148,9 +150,11 @@ const App: React.FC = () => {
         case 'life_event':
             logSummary = `오늘 "${newLog.data.event}"라는 생활 기록을 남겼습니다. 이게 통풍에 영향을 줄까요?`;
             break;
-        case 'purine_intake':
-            logSummary = `방금 식단 "${newLog.data.mealDescription}" (퓨린 점수: ${newLog.data.totalPurineScore})을(를) 오늘 섭취한 것으로 기록했습니다. 오늘의 총 섭취량을 고려했을 때 괜찮을까요?`;
+        case 'purine_intake': {
+            const mealTime = timeOfDayLabels[(newLog.data as PurineIntakeData).timeOfDay] || '해당 식사';
+            logSummary = `방금 ${mealTime}(으)로 식단 "${newLog.data.mealDescription}" (퓨린 점수: ${newLog.data.totalPurineScore})을(를) 기록했습니다. 오늘의 총 섭취량을 고려했을 때 괜찮을까요?`;
             break;
+        }
     }
     
     if (logSummary) {
@@ -163,13 +167,15 @@ const App: React.FC = () => {
       setLogs(prev => prev.filter(log => log.id !== logId));
   }, [setLogs]);
 
-  const handleAddToDailyLog = useCallback((meal: MealAnalysis) => {
+  const handleAddToDailyLog = useCallback((meal: MealAnalysis, timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
       const logData: LogData = {
           type: 'purine_intake',
-          data: meal,
+          data: {
+            ...meal,
+            timeOfDay,
+          },
       };
       addLog(logData, new Date());
-      // Maybe show a confirmation toast/message.
   }, [addLog]);
 
   const handleToggleFavorite = useCallback((meal: MealAnalysis) => {
@@ -196,7 +202,12 @@ const App: React.FC = () => {
         setChatHistory([]);
         setFoodHistory([]);
         setFavoriteMeals([]);
-        setPreferences({ weightUnit: 'kg', fluidUnit: 'ml' });
+        setPreferences({ 
+            weightUnit: 'kg', 
+            fluidUnit: 'ml', 
+            dailyFluidGoal: 2500, 
+            dailyPurineGoal: 150 
+        });
         setShowWelcome(true);
         window.location.reload();
     }
@@ -244,6 +255,13 @@ const App: React.FC = () => {
           };
           reader.readAsText(file);
       }
+  };
+  
+  const mainContentClass = {
+      dashboard: 'overflow-y-auto p-4 sm:p-6',
+      calendar: 'overflow-y-auto p-4 sm:p-6',
+      chat: 'flex flex-col overflow-hidden',
+      food: 'overflow-hidden'
   };
 
   const renderActiveView = () => {
@@ -293,17 +311,17 @@ const App: React.FC = () => {
       <Sidebar activeView={activeView} setActiveView={setActiveView} />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header onReset={handleDataReset} onExport={handleDataExport} onImport={handleDataImport} onOpenSettings={() => setIsSettingsModalOpen(true)} />
-        <main className={`flex-grow ${activeView === 'chat' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'} p-4 sm:p-6 pb-20 md:pb-6`}>
-          {renderActiveView()}
+        <main className={`flex-grow ${mainContentClass[activeView] || ''} pb-16 md:pb-0`}>
+             {renderActiveView()}
         </main>
       </div>
       
-      {isModalOpen && <LogModal date={modalDate} onClose={() => setIsModalOpen(false)} onAddLog={addLog} preferences={preferences} />}
+      {isModalOpen && <LogModal logs={logs} date={modalDate} onClose={() => setIsModalOpen(false)} onAddLog={addLog} preferences={preferences} />}
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} preferences={preferences} setPreferences={setPreferences} />
       
       <div>
         <FloatingActionButton onClick={() => setIsQuickLogOpen(true)} />
-        <QuickLogDrawer isOpen={isQuickLogOpen} onClose={() => setIsQuickLogOpen(false)} onAddLog={addLog} preferences={preferences} />
+        <QuickLogDrawer logs={logs} isOpen={isQuickLogOpen} onClose={() => setIsQuickLogOpen(false)} onAddLog={addLog} preferences={preferences} />
       </div>
 
       <BottomNavBar activeView={activeView} setActiveView={setActiveView} />

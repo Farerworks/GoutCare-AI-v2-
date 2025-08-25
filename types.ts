@@ -54,7 +54,9 @@ export interface MealAnalysis {
   alternatives: string[];
 }
 
-export interface PurineIntakeData extends MealAnalysis {}
+export interface PurineIntakeData extends MealAnalysis {
+    timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+}
 
 // Discriminated union for LogEntry
 export type LogData = 
@@ -97,6 +99,8 @@ export interface ChatMessage {
 export interface Preferences {
   weightUnit: 'kg' | 'lbs';
   fluidUnit: 'ml' | 'oz';
+  dailyFluidGoal: number; // in ml
+  dailyPurineGoal: number;
 }
 
 // Navigation Type

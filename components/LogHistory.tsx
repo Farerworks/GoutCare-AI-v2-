@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import type { LogEntry, WellnessData, Preferences } from '../types';
 import Card from './common/Card';
-import { getLogIcon } from '../utils/logUtils';
+import { getLogIcon, getLogColor } from '../utils/logUtils';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from './Icons';
 import { formatWeight, formatFluid } from '../utils/units';
 import Button from './common/Button';
@@ -68,12 +68,12 @@ const UnifiedCalendar: React.FC<{
           return (
             <div key={index} className="relative pt-[100%]" onClick={() => setSelectedDate(cellDate)}>
               <div className={`absolute inset-0.5 flex flex-col items-center justify-center rounded-lg transition-colors cursor-pointer ${isSelected ? 'bg-sky-500 text-white' : 'hover:bg-sky-100 dark:hover:bg-sky-900/50'}`}>
-                 <span className={`absolute top-1 right-1 text-xs w-6 h-6 flex items-center justify-center rounded-full font-semibold ${isToday && !isSelected ? 'bg-slate-200 dark:bg-slate-700' : ''}`}>
+                 <span className={`absolute top-1.5 right-1.5 text-xs w-6 h-6 flex items-center justify-center rounded-full font-semibold ${isToday && !isSelected ? 'bg-slate-200 dark:bg-slate-700' : ''} ${isSelected ? 'text-white' : 'text-slate-700 dark:text-slate-200'}`}>
                      {day}
                  </span>
-                 <div className="flex items-center justify-center gap-1 mt-4">
-                    {Array.from(new Set(logsForDay.map(l => l.type))).slice(0, 3).map(type => (
-                        <div key={type} className="w-4 h-4">{getLogIcon(type, `w-4 h-4 ${isSelected ? 'text-white' : ''}`)}</div>
+                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex space-x-1">
+                    {Array.from(new Set(logsForDay.map(l => l.type))).slice(0, 4).map(type => (
+                        <div key={type} className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-white' : getLogColor(type)}`}></div>
                     ))}
                  </div>
               </div>
@@ -104,6 +104,41 @@ const formatWellnessData = (data: WellnessData, preferences: Preferences) => {
     return parts.join(', ');
 };
 
+const LogListItem: React.FC<{ log: LogEntry, preferences: Preferences }> = ({ log, preferences }) => {
+    const getLogDetails = () => {
+        switch (log.type) {
+            case 'symptom': return `통증 부위: ${log.data.location}`;
+            case 'medication': return `${log.data.name}`;
+            case 'diet': return `${log.data.description}`;
+            case 'wellness': return "건강 지표 종합";
+            case 'life_event': return log.data.event;
+            case 'purine_intake': return log.data.mealDescription;
+            default: return '';
+        }
+    };
+    
+    const getLogSubDetails = () => {
+         switch (log.type) {
+            case 'symptom': return `통증 강도: ${log.data.painLevel}/10`;
+            case 'medication': return `시간: ${timeOfDayLabels[log.data.timeOfDay] || log.data.timeOfDay}`;
+            case 'diet': return `시간: ${timeOfDayLabels[log.data.timeOfDay] || log.data.timeOfDay}`;
+            case 'wellness': return formatWellnessData(log.data, preferences);
+            case 'purine_intake': return `퓨린 점수: ${log.data.totalPurineScore}, 위험도: ${log.data.overallRiskLevel}`;
+            default: return '';
+        }
+    };
+
+    return (
+         <li className="flex items-start p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50">
+            <div className="flex-shrink-0 mt-1">{getLogIcon(log.type, "w-5 h-5")}</div>
+            <div className="ml-3 flex-grow">
+                <p className="font-semibold text-slate-800 dark:text-slate-200">{getLogDetails()}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{getLogSubDetails()}</p>
+            </div>
+        </li>
+    );
+};
+
 
 const DailyLogList: React.FC<{
     logs: LogEntry[],
@@ -115,21 +150,9 @@ const DailyLogList: React.FC<{
     const logsForDay = useMemo(() => {
         return logs
             .filter(log => isSameDay(new Date(log.timestamp), selectedDate))
-            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }, [logs, selectedDate]);
     
-    const groupedLogs = useMemo(() => {
-        return logsForDay.reduce((acc, log) => {
-            if (!acc[log.type]) {
-                acc[log.type] = [];
-            }
-            acc[log.type].push(log);
-            return acc;
-        }, {} as Record<LogEntry['type'], LogEntry[]>);
-    }, [logsForDay]);
-
-    const logOrder: LogEntry['type'][] = ['symptom', 'medication', 'diet', 'wellness', 'life_event'];
-
     return (
         <Card>
             <div className="flex justify-between items-center mb-4">
@@ -142,38 +165,17 @@ const DailyLogList: React.FC<{
                 </Button>
             </div>
             {logsForDay.length === 0 ? (
-                <p className="text-center text-slate-500 dark:text-slate-400 py-8">이 날짜에는 기록이 없습니다.</p>
-            ) : (
-                <div className="space-y-4">
-                    {logOrder.map(type => {
-                        if (!groupedLogs[type] || groupedLogs[type].length === 0) return null;
-                        
-                        return (
-                            <div key={type}>
-                                <h4 className="font-semibold text-slate-600 dark:text-slate-300 mb-2 flex items-center">
-                                    {getLogIcon(type, "w-5 h-5 mr-2")}
-                                    {type === 'symptom' && '증상'}
-                                    {type === 'medication' && '약물'}
-                                    {type === 'diet' && '식단'}
-                                    {type === 'wellness' && '건강 지표'}
-                                    {type === 'life_event' && '생활 기록'}
-                                </h4>
-                                <ul className="space-y-2 pl-7">
-                                    {groupedLogs[type].map(log => (
-                                        <li key={log.id} className="text-sm text-slate-700 dark:text-slate-400">
-                                            {log.type === 'symptom' && `통증: ${log.data.location} (강도: ${log.data.painLevel}/10)`}
-                                            {log.type === 'medication' && `${log.data.name} - ${timeOfDayLabels[log.data.timeOfDay] || log.data.timeOfDay}`}
-                                            {log.type === 'diet' && `${log.data.description} - ${timeOfDayLabels[log.data.timeOfDay] || log.data.timeOfDay}`}
-                                            {log.type === 'wellness' && formatWellnessData(log.data, preferences)}
-                                            {log.type === 'life_event' && log.data.event}
-                                        </li>
-                                    ))}
-
-                                </ul>
-                            </div>
-                        )
-                    })}
+                <div className="flex flex-col items-center justify-center text-center h-48">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center mb-4">
+                       {getLogIcon('life_event', 'w-8 h-8')}
+                    </div>
+                    <p className="font-semibold">기록 없음</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm">이 날짜에는 기록이 없습니다.</p>
                 </div>
+            ) : (
+                <ul className="space-y-3">
+                    {logsForDay.map(log => <LogListItem key={log.id} log={log} preferences={preferences} />)}
+                </ul>
             )}
         </Card>
     );
@@ -185,20 +187,24 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({ logs, onOpenLogModal, pre
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   return (
-    <div className="space-y-6">
-       <UnifiedCalendar 
-        logs={logs}
-        currentDate={currentDate}
-        setCurrentDate={setCurrentDate}
-        selectedDate={selectedDate}
-        setSelectedDate={setSelectedDate}
-       />
-       <DailyLogList 
-        logs={logs} 
-        selectedDate={selectedDate}
-        preferences={preferences}
-        onOpenLogModal={onOpenLogModal}
-       />
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+       <div className="xl:col-span-1">
+            <UnifiedCalendar 
+                logs={logs}
+                currentDate={currentDate}
+                setCurrentDate={setCurrentDate}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+            />
+       </div>
+       <div className="xl:col-span-1">
+            <DailyLogList 
+                logs={logs} 
+                selectedDate={selectedDate}
+                preferences={preferences}
+                onOpenLogModal={onOpenLogModal}
+            />
+       </div>
     </div>
   );
 };

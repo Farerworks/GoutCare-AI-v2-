@@ -215,3 +215,57 @@ export const analyzeMealFromText = async (description: string): Promise<Omit<Mea
         return null;
     }
 };
+
+export const generateMealIdeas = async (): Promise<string[] | null> => {
+    const systemInstructionForIdeas = "You are a creative chef and nutritionist specializing in gout-friendly cuisine. Your task is to provide delicious and safe meal ideas for a user managing gout. Respond only with a JSON array of strings, with each string being a distinct meal idea. Do not include markdown. The response must be in Korean.";
+    
+    const prompt = "통풍 환자를 위한 건강하고 맛있는 식단 아이디어를 아침, 점심, 저녁 각각 2가지씩, 총 6가지를 추천해주세요. 예를 들어 '현미밥과 두부 된장찌개'처럼 구체적인 메뉴 이름으로 제안해주세요.";
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstructionForIdeas,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                },
+            },
+        });
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString) as string[];
+    } catch (error) {
+        console.error("Error generating meal ideas:", error);
+        return null;
+    }
+};
+
+export const generateMealComparison = async (meals: MealAnalysis[]): Promise<string | null> => {
+    if (meals.length < 2) return null;
+    const systemInstructionForComparison = "You are a gout management expert and nutritionist, communicating in Korean. The user will provide data for two or more meals. Your task is to compare them and provide a clear, concise recommendation for which meal is a better choice for a gout patient. Explain the 'why' behind your recommendation, referencing purine scores and key ingredients. Be encouraging and supportive.";
+    
+    const mealSummaries = meals.map(m => ({
+        description: m.mealDescription,
+        purineScore: m.totalPurineScore,
+        riskLevel: m.overallRiskLevel,
+    }));
+
+    const prompt = `통풍 환자를 위해 다음 식단들을 비교 분석하고, 어떤 것이 더 나은 선택인지 명확한 이유와 함께 추천해주세요. 답변은 한두 문단의 짧고 이해하기 쉬운 요약으로 제공해주세요.\n\n[비교할 식단]\n${JSON.stringify(mealSummaries, null, 2)}`;
+    
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstructionForComparison,
+                temperature: 0.7,
+            },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating meal comparison:", error);
+        return "죄송합니다, 식단 비교 분석 중 오류가 발생했습니다.";
+    }
+};

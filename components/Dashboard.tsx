@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import type { LogEntry, Preferences, MedicationData, MealAnalysis } from '../types';
 import Card from './common/Card';
-import { CheckIcon, TrashIcon, CameraIcon, TargetIcon, SparklesIcon, BookOpenIcon } from './Icons';
+import { CheckIcon, TrashIcon, CameraIcon, TargetIcon, SparklesIcon, BookOpenIcon, FlameIcon, TrophyIcon, ShieldCheckIcon } from './Icons';
 import { formatFluid, formatWeight, kgToLbs } from '../utils/units';
 
 interface DashboardPanelProps {
@@ -16,12 +16,32 @@ interface DashboardPanelProps {
   onDismissWelcome: () => void;
 }
 
-const getRiskLevelColor = (level: string) => {
+const getRiskLevelStyles = (level: string) => {
     switch (level) {
-        case '낮음': return 'text-green-500 border-green-500 bg-green-50 dark:bg-green-900/50';
-        case '주의': return 'text-yellow-500 border-yellow-500 bg-yellow-50 dark:bg-yellow-900/50';
-        case '높음': return 'text-red-500 border-red-500 bg-red-50 dark:bg-red-900/50';
-        default: return 'text-slate-500 border-slate-500 bg-slate-50 dark:bg-slate-700';
+        case '낮음': return {
+            text: 'text-green-600 dark:text-green-400',
+            border: 'border-green-500',
+            bg: 'bg-green-50 dark:bg-green-900/50',
+            gradient: 'from-green-50 to-green-100 dark:from-green-900/50 dark:to-green-900/70',
+        };
+        case '주의': return {
+            text: 'text-yellow-600 dark:text-yellow-400',
+            border: 'border-yellow-500',
+            bg: 'bg-yellow-50 dark:bg-yellow-900/50',
+            gradient: 'from-yellow-50 to-yellow-100 dark:from-yellow-900/50 dark:to-yellow-900/70',
+        };
+        case '높음': return {
+            text: 'text-red-600 dark:text-red-400',
+            border: 'border-red-500',
+            bg: 'bg-red-50 dark:bg-red-900/50',
+            gradient: 'from-red-50 to-red-100 dark:from-red-900/50 dark:to-red-900/70',
+        };
+        default: return {
+            text: 'text-slate-600 dark:text-slate-400',
+            border: 'border-slate-500',
+            bg: 'bg-slate-50 dark:bg-slate-700',
+            gradient: 'from-slate-50 to-slate-100 dark:from-slate-800 dark:to-slate-800/70',
+        };
     }
 };
 
@@ -87,9 +107,13 @@ interface DailyGoutRiskAdvisorProps {
 }
 
 const DailyGoutRiskAdvisor: React.FC<DailyGoutRiskAdvisorProps> = ({ risk, summary, forecast, isLoading }) => {
+    const styles = getRiskLevelStyles(risk);
     return (
-        <Card>
-            <h3 className="text-lg font-semibold mb-3 text-slate-800 dark:text-slate-200">오늘의 통풍 위험도</h3>
+        <Card className={`bg-gradient-to-br ${styles.gradient}`}>
+             <div className="flex items-center mb-3">
+                <ShieldCheckIcon className={`w-6 h-6 mr-2 ${styles.text}`} />
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">오늘의 통풍 위험도</h3>
+            </div>
             {isLoading ? (
                 <div className="space-y-3 animate-pulse">
                     <div className="h-8 w-24 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
@@ -98,7 +122,7 @@ const DailyGoutRiskAdvisor: React.FC<DailyGoutRiskAdvisorProps> = ({ risk, summa
                 </div>
             ) : (
                 <div className="space-y-3">
-                    <div className={`inline-block px-3 py-1 text-base font-bold rounded-lg border-2 ${getRiskLevelColor(risk)}`}>
+                    <div className={`inline-block px-3 py-1 text-base font-bold rounded-lg border-2 ${styles.text} ${styles.border} ${styles.bg}`}>
                         {risk}
                     </div>
                     <p className="text-md font-semibold text-slate-700 dark:text-slate-300">{summary}</p>
@@ -109,8 +133,7 @@ const DailyGoutRiskAdvisor: React.FC<DailyGoutRiskAdvisorProps> = ({ risk, summa
     );
 };
 
-const DailyPurineTracker: React.FC<{ logs: LogEntry[], onDeleteLog: (logId: string) => void }> = ({ logs, onDeleteLog }) => {
-    const dailyGoal = 150; // Arbitrary goal for purine score
+const DailyPurineTracker: React.FC<{ logs: LogEntry[], onDeleteLog: (logId: string) => void, dailyGoal: number }> = ({ logs, onDeleteLog, dailyGoal }) => {
     const todayStr = new Date().toISOString().split('T')[0];
 
     const todaysPurineLogs = useMemo(() => logs.filter(log =>
@@ -127,7 +150,7 @@ const DailyPurineTracker: React.FC<{ logs: LogEntry[], onDeleteLog: (logId: stri
             <h3 className="text-lg font-semibold mb-3 text-slate-800 dark:text-slate-200">오늘의 퓨린 섭취량</h3>
             <div className="flex items-center justify-between mb-2">
                 <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{totalScore}</span>
-                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">권장: {dailyGoal} 이하</span>
+                <span className="text-sm font-semibold text-slate-500 dark:text-slate-400">목표: {dailyGoal} 이하</span>
             </div>
             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
                 <div className={`${progressColor} h-3 rounded-full transition-all duration-500`} style={{ width: `${progress}%` }}></div>
@@ -157,7 +180,7 @@ const DailyPurineTracker: React.FC<{ logs: LogEntry[], onDeleteLog: (logId: stri
 
 
 const TodaysChecklist: React.FC<{ logs: LogEntry[], preferences: Preferences }> = ({ logs, preferences }) => {
-    const dailyFluidGoalMl = 2500;
+    const dailyFluidGoalMl = preferences.dailyFluidGoal;
     const todayStr = new Date().toISOString().split('T')[0];
 
     const todaysLogs = useMemo(() => logs.filter(log => log.timestamp.startsWith(todayStr)), [logs, todayStr]);
@@ -264,21 +287,114 @@ const WeeklyHealthReport: React.FC<{ logs: LogEntry[], preferences: Preferences 
     );
 };
 
+const calculateStreaks = (logs: LogEntry[]) => {
+    if (logs.length === 0) {
+        return { loggingStreak: 0 };
+    }
+
+    const logDates = [...new Set(logs.map(log => log.timestamp.split('T')[0]))];
+    logDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+    const today = new Date();
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const mostRecentLogDate = new Date(logDates[0]);
+    const mostRecentLogDateStart = new Date(mostRecentLogDate.getFullYear(), mostRecentLogDate.getMonth(), mostRecentLogDate.getDate());
+
+    const timeDiff = todayStart.getTime() - mostRecentLogDateStart.getTime();
+    const dayDiff = Math.round(timeDiff / (1000 * 3600 * 24));
+
+    if (dayDiff > 1) {
+        return { loggingStreak: 0 };
+    }
+
+    let streak = 1;
+    let lastDate = new Date(logDates[0]);
+    for (let i = 1; i < logDates.length; i++) {
+        const currentDate = new Date(logDates[i]);
+        const dateDiff = lastDate.getTime() - currentDate.getTime();
+        const daysApart = Math.round(dateDiff / (1000 * 3600 * 24));
+        
+        if (daysApart === 1) {
+            streak++;
+            lastDate = currentDate;
+        } else {
+            break;
+        }
+    }
+    
+    return { loggingStreak: streak };
+};
+
+const AchievementsCard: React.FC<{ logs: LogEntry[] }> = ({ logs }) => {
+    const { loggingStreak } = calculateStreaks(logs);
+
+    const achievements = [
+        {
+            icon: <FlameIcon className="w-8 h-8 text-orange-500" />,
+            title: "연속 기록",
+            value: loggingStreak,
+            unit: "일째",
+            description: "매일 기록하는 습관을 만들어보세요!",
+            isAchieved: loggingStreak > 0,
+        },
+    ];
+
+    return (
+        <Card>
+            <h3 className="text-lg font-semibold mb-4 text-slate-800 dark:text-slate-200">나의 달성 현황</h3>
+            {achievements.length > 0 ? (
+                <div className="space-y-4">
+                    {achievements.map(ach => (
+                        <div key={ach.title} className={`flex items-center space-x-4 p-3 rounded-lg ${ach.isAchieved ? 'bg-green-50 dark:bg-green-900/50' : 'bg-slate-100 dark:bg-slate-700/50'}`}>
+                            <div className="flex-shrink-0">{ach.icon}</div>
+                            <div className="flex-grow">
+                                <h4 className="font-semibold text-slate-700 dark:text-slate-200">{ach.title}</h4>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">{ach.description}</p>
+                            </div>
+                            {ach.isAchieved && (
+                                <div className="text-right flex-shrink-0">
+                                    <p className="text-xl font-bold text-green-600 dark:text-green-400">{ach.value}<span className="text-sm font-medium ml-1">{ach.unit}</span></p>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-4">아직 달성한 목표가 없습니다.</p>
+            )}
+        </Card>
+    );
+};
+
 
 const DashboardPanel: React.FC<DashboardPanelProps> = ({ logs, preferences, risk, summary, forecast, isLoadingForecast, onDeleteLog, showWelcome, onDismissWelcome }) => {
   return (
     <div className="space-y-6">
         {showWelcome && <WelcomeGuide onDismiss={onDismissWelcome} />}
         <h2 className="text-2xl font-bold text-slate-900 dark:text-white">오늘의 통풍 관리</h2>
-        <DailyGoutRiskAdvisor 
-            risk={risk}
-            summary={summary}
-            forecast={forecast}
-            isLoading={isLoadingForecast}
-        />
-        <DailyPurineTracker logs={logs} onDeleteLog={onDeleteLog} />
-        <TodaysChecklist logs={logs} preferences={preferences} />
-        <WeeklyHealthReport logs={logs} preferences={preferences} />
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+                <DailyGoutRiskAdvisor 
+                    risk={risk}
+                    summary={summary}
+                    forecast={forecast}
+                    isLoading={isLoadingForecast}
+                />
+            </div>
+            <div className="lg:col-span-1">
+                 <AchievementsCard logs={logs} />
+            </div>
+            <div className="lg:col-span-2">
+                <DailyPurineTracker logs={logs} onDeleteLog={onDeleteLog} dailyGoal={preferences.dailyPurineGoal} />
+            </div>
+            <div className="lg:col-span-1">
+                <TodaysChecklist logs={logs} preferences={preferences} />
+            </div>
+            <div className="lg:col-span-3">
+                <WeeklyHealthReport logs={logs} preferences={preferences} />
+            </div>
+        </div>
     </div>
   );
 };

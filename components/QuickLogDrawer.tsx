@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { LogData, Preferences, SymptomData, DietData, MedicationData } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { LogData, Preferences, SymptomData, DietData, MedicationData, LogEntry } from '../types';
 import Button from './common/Button';
 import { WaterDropIcon, DietIcon, MedicationIcon, SymptomIcon, ChevronLeftIcon, CloseIcon } from './Icons';
 
@@ -8,9 +8,10 @@ interface QuickLogDrawerProps {
   onClose: () => void;
   onAddLog: (log: LogData, date: Date) => void;
   preferences: Preferences;
+  logs: LogEntry[];
 }
 
-const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddLog, preferences }) => {
+const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddLog, preferences, logs }) => {
   const [view, setView] = useState<'main' | 'water' | 'diet' | 'medication' | 'symptom'>('main');
 
   useEffect(() => {
@@ -39,11 +40,11 @@ const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddL
       case 'water':
         return <WaterLogForm onSubmit={handleAddLog} />;
       case 'diet':
-        return <QuickDietOrMedicationForm type="diet" onSubmit={(data) => handleAddLog({ data }, 'diet')} />;
+        return <QuickDietOrMedicationForm type="diet" logs={logs} onSubmit={(data) => handleAddLog({ data }, 'diet')} />;
        case 'medication':
-        return <QuickDietOrMedicationForm type="medication" onSubmit={(data) => handleAddLog({ data }, 'medication')} />;
+        return <QuickDietOrMedicationForm type="medication" logs={logs} onSubmit={(data) => handleAddLog({ data }, 'medication')} />;
       case 'symptom':
-        return <QuickSymptomForm onSubmit={(data) => handleAddLog({ data }, 'symptom')} />;
+        return <QuickSymptomForm logs={logs} onSubmit={(data) => handleAddLog({ data }, 'symptom')} />;
       default:
         return null;
     }
@@ -129,9 +130,63 @@ const WaterLogForm: React.FC<{ onSubmit: (logData: { data: { fluidIntake: number
     );
 };
 
-const QuickDietOrMedicationForm: React.FC<{ type: 'medication' | 'diet', onSubmit: (data: MedicationData | DietData) => void }> = ({ type, onSubmit }) => {
+const AutocompleteInput: React.FC<{
+    value: string;
+    onChange: (value: string) => void;
+    suggestions: string[];
+    placeholder?: string;
+    required?: boolean;
+}> = ({ value, onChange, suggestions, placeholder, required }) => {
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    const filteredSuggestions = useMemo(() =>
+        suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()) && s.toLowerCase() !== value.toLowerCase()),
+        [suggestions, value]
+    );
+
+    return (
+        <div className="relative">
+            <input
+                type="text"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder={placeholder}
+                required={required}
+                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
+            />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+                <ul className="absolute bottom-full mb-1 z-20 w-full bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                    {filteredSuggestions.map((suggestion, index) => (
+                        <li
+                            key={index}
+                            onClick={() => {
+                                onChange(suggestion);
+                                setShowSuggestions(false);
+                            }}
+                            className="px-4 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-500"
+                        >
+                            {suggestion}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
+const QuickDietOrMedicationForm: React.FC<{ type: 'medication' | 'diet', logs: LogEntry[], onSubmit: (data: MedicationData | DietData) => void }> = ({ type, logs, onSubmit }) => {
     const [name, setName] = useState('');
     
+    const suggestions = useMemo(() => {
+        if (type === 'medication') {
+            return [...new Set(logs.filter(l => l.type === 'medication').map(l => (l.data as MedicationData).name))];
+        } else {
+            return [...new Set(logs.filter(l => l.type === 'diet').map(l => (l.data as DietData).description))];
+        }
+    }, [logs, type]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!name.trim()) return;
@@ -147,16 +202,27 @@ const QuickDietOrMedicationForm: React.FC<{ type: 'medication' | 'diet', onSubmi
         <form onSubmit={handleSubmit} className="space-y-4 p-2">
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{type === 'medication' ? '약물 이름' : '음식/음료 설명'}</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} required placeholder={type === 'medication' ? '예: 콜히친' : '예: 오렌지 주스'} className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"/>
+                 <AutocompleteInput 
+                    value={name}
+                    onChange={setName}
+                    suggestions={suggestions}
+                    placeholder={type === 'medication' ? '예: 콜히친' : '예: 오렌지 주스'}
+                    required
+                />
             </div>
             <Button type="submit" size="lg" className="w-full">기록 저장</Button>
         </form>
     );
 };
 
-const QuickSymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void }> = ({ onSubmit }) => {
+const QuickSymptomForm: React.FC<{ logs: LogEntry[], onSubmit: (data: SymptomData) => void }> = ({ logs, onSubmit }) => {
     const [painLevel, setPainLevel] = useState(5);
     const [location, setLocation] = useState('');
+    
+    const commonLocations = ["엄지발가락", "발목", "무릎"];
+    const locationSuggestions = useMemo(() => 
+        [...new Set(logs.filter(l => l.type === 'symptom').map(l => (l.data as SymptomData).location))]
+    , [logs]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -168,7 +234,12 @@ const QuickSymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void }> = ({
         <form onSubmit={handleSubmit} className="space-y-4 p-2">
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">통증 부위</label>
-                <input type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="예: 오른쪽 엄지발가락" required className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"/>
+                <AutocompleteInput value={location} onChange={setLocation} suggestions={locationSuggestions} placeholder="예: 오른쪽 엄지발가락" required />
+                 <div className="flex flex-wrap gap-2 mt-2">
+                    {commonLocations.map(loc => (
+                        <button key={loc} type="button" onClick={() => setLocation(loc)} className="px-2.5 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-sky-200 dark:hover:bg-sky-700">{loc}</button>
+                    ))}
+                </div>
             </div>
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">통증 강도: <span className="font-bold">{painLevel}</span>/10</label>

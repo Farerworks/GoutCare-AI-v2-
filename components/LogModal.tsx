@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LogType, LogData, SymptomData, MedicationData, DietData, WellnessData, Preferences, LifeEventData } from '../types';
+import React, { useState, useMemo } from 'react';
+import { LogType, LogData, SymptomData, MedicationData, DietData, WellnessData, Preferences, LifeEventData, LogEntry } from '../types';
 import Button from './common/Button';
 import { getLogIcon } from '../utils/logUtils';
 import { CloseIcon, SymptomIcon, MedicationIcon, DietIcon, HeartIcon, TagIcon } from './Icons';
@@ -10,13 +10,67 @@ interface LogModalProps {
   onClose: () => void;
   onAddLog: (log: LogData, date: Date) => void;
   preferences: Preferences;
+  logs: LogEntry[];
 }
 
+// Reusable Autocomplete Input Component
+const AutocompleteInput: React.FC<{
+    value: string;
+    onChange: (value: string) => void;
+    suggestions: string[];
+    placeholder?: string;
+    required?: boolean;
+}> = ({ value, onChange, suggestions, placeholder, required }) => {
+    const [showSuggestions, setShowSuggestions] = useState(false);
+
+    const filteredSuggestions = useMemo(() =>
+        suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()) && s.toLowerCase() !== value.toLowerCase()),
+        [suggestions, value]
+    );
+
+    return (
+        <div className="relative">
+            <input
+                type="text"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder={placeholder}
+                required={required}
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
+            />
+            {showSuggestions && filteredSuggestions.length > 0 && (
+                <ul className="absolute z-10 w-full mt-1 bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                    {filteredSuggestions.map((suggestion, index) => (
+                        <li
+                            key={index}
+                            onClick={() => {
+                                onChange(suggestion);
+                                setShowSuggestions(false);
+                            }}
+                            className="px-4 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-500"
+                        >
+                            {suggestion}
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
+
+
 // Sub-components for each log form
-const SymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void }> = ({ onSubmit }) => {
+const SymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void; logs: LogEntry[] }> = ({ onSubmit, logs }) => {
     const [painLevel, setPainLevel] = useState(5);
     const [location, setLocation] = useState('');
     const [symptoms, setSymptoms] = useState<SymptomData['symptoms']>([]);
+    
+    const commonLocations = ["엄지발가락", "발목", "무릎", "손목"];
+    const locationSuggestions = useMemo(() => 
+        [...new Set(logs.filter(l => l.type === 'symptom').map(l => (l.data as SymptomData).location))]
+    , [logs]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -27,7 +81,12 @@ const SymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void }> = ({ onSu
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
                 <label htmlFor="location" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">통증 부위</label>
-                <input id="location" type="text" value={location} onChange={e => setLocation(e.target.value)} placeholder="예: 오른쪽 엄지발가락" required className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"/>
+                <AutocompleteInput value={location} onChange={setLocation} suggestions={locationSuggestions} placeholder="예: 오른쪽 엄지발가락" required />
+                <div className="flex flex-wrap gap-2 mt-2">
+                    {commonLocations.map(loc => (
+                        <button key={loc} type="button" onClick={() => setLocation(loc)} className="px-2.5 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-sky-200 dark:hover:bg-sky-700">{loc}</button>
+                    ))}
+                </div>
             </div>
              <div>
                 <label htmlFor="painLevel" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">통증 강도: <span className="font-bold">{painLevel}</span>/10</label>
@@ -129,7 +188,7 @@ const LifeEventForm: React.FC<{ onSubmit: (data: LifeEventData) => void }> = ({ 
 };
 
 
-const LogModal: React.FC<LogModalProps> = ({ date, onClose, onAddLog, preferences }) => {
+const LogModal: React.FC<LogModalProps> = ({ date, onClose, onAddLog, preferences, logs }) => {
   const [step, setStep] = useState<'select' | LogType>('select');
 
   const handleLogSubmit = (logData: Omit<LogData, 'type'>) => {
@@ -139,11 +198,11 @@ const LogModal: React.FC<LogModalProps> = ({ date, onClose, onAddLog, preference
   const renderForm = () => {
       switch(step) {
           case 'symptom':
-            return <SymptomForm onSubmit={(data) => onAddLog({type: 'symptom', data}, date)} />;
+            return <SymptomForm logs={logs} onSubmit={(data) => onAddLog({type: 'symptom', data}, date)} />;
           case 'medication':
-            return <MedicationOrDietForm type="medication" onSubmit={(data) => onAddLog({ type: 'medication', data: data as MedicationData }, date)} />;
+            return <MedicationOrDietForm type="medication" logs={logs} onSubmit={(data) => onAddLog({ type: 'medication', data: data as MedicationData }, date)} />;
           case 'diet':
-            return <MedicationOrDietForm type="diet" onSubmit={(data) => onAddLog({ type: 'diet', data: data as DietData }, date)} />;
+            return <MedicationOrDietForm type="diet" logs={logs} onSubmit={(data) => onAddLog({ type: 'diet', data: data as DietData }, date)} />;
           case 'wellness':
             return <WellnessForm onSubmit={(data) => onAddLog({ type: 'wellness', data }, date)} preferences={preferences} />;
           case 'life_event':
@@ -194,10 +253,19 @@ const TypeButton: React.FC<{ type: LogType, label: string, icon: React.ReactNode
     </button>
 );
 
-const MedicationOrDietForm: React.FC<{ type: 'medication' | 'diet', onSubmit: (data: MedicationData | DietData) => void }> = ({ type, onSubmit }) => {
+const MedicationOrDietForm: React.FC<{ type: 'medication' | 'diet', logs: LogEntry[], onSubmit: (data: MedicationData | DietData) => void }> = ({ type, logs, onSubmit }) => {
     const [name, setName] = useState('');
     const [timeOfDay, setTimeOfDay] = useState<'morning' | 'lunch' | 'dinner' | 'bedtime' | 'breakfast' | 'snack'>(type === 'medication' ? 'morning' : 'breakfast');
     const [photo, setPhoto] = useState<string | undefined>();
+    
+    const suggestions = useMemo(() => {
+        if (type === 'medication') {
+            return [...new Set(logs.filter(l => l.type === 'medication').map(l => (l.data as MedicationData).name))];
+        } else {
+            return [...new Set(logs.filter(l => l.type === 'diet').map(l => (l.data as DietData).description))];
+        }
+    }, [logs, type]);
+
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -227,7 +295,7 @@ const MedicationOrDietForm: React.FC<{ type: 'medication' | 'diet', onSubmit: (d
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{type === 'medication' ? '약물 이름' : '음식 설명'}</label>
-                <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"/>
+                <AutocompleteInput value={name} onChange={setName} suggestions={suggestions} required />
             </div>
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">시간</label>
