@@ -2,9 +2,7 @@
 {
   "header": {
     "subtitle": "통풍 관리",
-    "shareText": "이 통풍 관리 앱을 확인해보세요!",
     "buttons": {
-      "share": "앱 공유하기",
       "settings": "설정",
       "import": "데이터 가져오기",
       "export": "데이터 내보내기",
@@ -158,7 +156,9 @@
     "aiRecommendedMeals": "AI 추천 식단",
     "estPurineScore": "예상 퓨린 점수",
     "clickForAnalysis": "마음에 드는 식단을 클릭하여 상세 분석을 진행하세요.",
-    "backToLibrary": "라이브러리로 돌아가기"
+    "backToLibrary": "라이브러리로 돌아가기",
+    "points": "점",
+    "aiRecommendation": "AI 추천"
   },
   "report": {
     "loadingTitle": "AI가 데이터를 분석 중입니다...",
@@ -173,8 +173,10 @@
     "recommendation": "권장 사항",
     "positiveHabits": "긍정적인 습관",
     "areasForImprovement": "개선 영역",
+    "share": "공유하기",
+    "copied": "복사됨!",
     "trends": {
-      "title": "주간/월간 건강 트렌드",
+      "title": "건강 트렌드",
       "7days": "7일",
       "30days": "30일",
       "painLevel": "통증 수준",
@@ -201,7 +203,24 @@
     "fluidUnit": "수분 단위",
     "ml": "밀리리터 (ml)",
     "oz": "온스 (oz)",
+    "personalProfile": {
+      "title": "개인 프로필",
+      "gender": "성별",
+      "male": "남성",
+      "female": "여성",
+      "other": "기타",
+      "preferNotToSay": "응답 안 함",
+      "birthYear": "출생 연도",
+      "height": "키 (cm)",
+      "weight": "체중 ({{unit}})"
+    },
+    "save": "저장",
     "close": "닫기"
+  },
+  "profileSetup": {
+    "title": "프로필 설정",
+    "subtitle": "이 정보를 제공하면 AI가 더 개인화된 통찰력을 제공하는 데 도움이 됩니다. (선택 사항)",
+    "saveButton": "저장하고 계속하기"
   },
   "welcome": {
     "title": "GoutCare AI에 오신 것을 환영합니다!",
@@ -259,6 +278,15 @@
     },
     "hydration": {
       "title": "수분 기록",
+      "typeLabel": "음료 종류",
+      "types": {
+          "water": "물",
+          "coffee": "커피",
+          "tea": "차",
+          "dairy": "유제품",
+          "juice": "주스",
+          "soda": "탄산음료"
+      },
       "amountLabel": "섭취량 ({{unit}})",
       "notesPlaceholder": "예: 운동 후 물"
     },
@@ -268,6 +296,11 @@
       "beer": "맥주",
       "soju": "소주",
       "wine": "와인",
+      "makgeolli": "막걸리",
+      "whiskey": "위스키",
+      "other": "기타",
+      "customTypeLabel": "주종 직접 입력",
+      "customTypePlaceholder": "예: 하이볼",
       "amountLabel": "섭취량 ({{unit}})",
       "notesPlaceholder": "예: 회식 자리에서"
     },
@@ -278,10 +311,28 @@
       "stressLabel": "스트레스 수준",
       "activityLabel": "활동",
       "activityPlaceholder": "예: 30분 걷기",
-      "notesPlaceholder": "오늘의 컨디션이나 특별한 이벤트를 기록하세요."
+      "intensity": {
+        "label": "운동 강도",
+        "low": "저",
+        "medium": "중",
+        "high": "고"
+      },
+      "sweat": {
+        "label": "땀 흘린 정도",
+        "low": "적음",
+        "medium": "보통",
+        "high": "많음"
+      },
+      "notesPlaceholder": "오늘의 컨디션, 특별한 이벤트, 특정 관절의 물리적 충격 등을 기록하세요."
     },
     "medication": {
       "title": "약물 기록",
+      "categoryLabel": "종류",
+      "categories": {
+          "prescription": "처방약",
+          "supplement": "영양제",
+          "other": "기타"
+      },
       "nameLabel": "약물 이름",
       "namePlaceholder": "예: 알로푸리놀",
       "dosageLabel": "복용량 (선택 사항)",
@@ -296,7 +347,8 @@
       "history": "기록",
       "favorites": "즐겨찾기",
       "placeholder": "음식 이름이나 재료를 입력하세요... (예: 돼지고기 김치찌개)",
-      "analyzeWithAi": "AI로 분석하기"
+      "analyzeWithAi": "AI로 분석하기",
+      "fastingLabel": "오늘 간헐적 단식"
     }
   }
 }

@@ -1,7 +1,7 @@
 
 
-import React from 'react';
-import type { LogEntry, Preferences, HealthReport } from '../types';
+import React, { useMemo } from 'react';
+import type { LogEntry, Preferences, HealthReport, WellnessData, LogData } from '../types';
 import Card from './common/Card';
 import WelcomeGuide from './dashboard/WelcomeGuide';
 import RiskAdvisorCard from './dashboard/RiskAdvisorCard';
@@ -9,7 +9,7 @@ import AiCoachNoteCard from './dashboard/AiCoachNoteCard';
 import StreakTrackerCard from './dashboard/StreakTrackerCard';
 import RecentLogsCard from './dashboard/RecentLogsCard';
 import DailySummaryCard from './dashboard/DailySummaryCard';
-import { useI18n } from '../hooks/useI18n';
+import { useI18n } from '../../hooks/useI18n';
 
 interface DashboardPanelProps {
   logs: LogEntry[];
@@ -18,6 +18,7 @@ interface DashboardPanelProps {
   summary: string;
   forecast: string;
   isLoadingForecast: boolean;
+  onAddLog: (log: LogData, date: Date) => void;
   onDeleteLog: (logId: string) => void;
   showWelcome: boolean;
   onDismissWelcome: () => void;
@@ -34,6 +35,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({
     summary, 
     forecast, 
     isLoadingForecast,
+    onAddLog,
     onDeleteLog,
     showWelcome,
     onDismissWelcome,

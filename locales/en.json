@@ -2,9 +2,7 @@
 {
   "header": {
     "subtitle": "Gout Management",
-    "shareText": "Check out this Gout management app!",
     "buttons": {
-      "share": "Share App",
       "settings": "Settings",
       "import": "Import Data",
       "export": "Export Data",
@@ -158,7 +156,9 @@
     "aiRecommendedMeals": "AI Recommended Meals",
     "estPurineScore": "Est. Purine Score",
     "clickForAnalysis": "Click on a meal you like to proceed with a detailed analysis.",
-    "backToLibrary": "Back to Library"
+    "backToLibrary": "Back to Library",
+    "points": "points",
+    "aiRecommendation": "AI Recommendation"
   },
   "report": {
     "loadingTitle": "AI is analyzing your data...",
@@ -173,8 +173,10 @@
     "recommendation": "Recommendation",
     "positiveHabits": "Positive Habits",
     "areasForImprovement": "Areas for Improvement",
+    "share": "Share",
+    "copied": "Copied!",
     "trends": {
-      "title": "Weekly/Monthly Health Trends",
+      "title": "Health Trends",
       "7days": "7 Days",
       "30days": "30 Days",
       "painLevel": "Pain Level",
@@ -201,7 +203,24 @@
     "fluidUnit": "Fluid Unit",
     "ml": "Milliliters (ml)",
     "oz": "Ounces (oz)",
+    "personalProfile": {
+      "title": "Personal Profile",
+      "gender": "Gender",
+      "male": "Male",
+      "female": "Female",
+      "other": "Other",
+      "preferNotToSay": "Prefer not to say",
+      "birthYear": "Birth Year",
+      "height": "Height (cm)",
+      "weight": "Weight ({{unit}})"
+    },
+    "save": "Save",
     "close": "Close"
+  },
+  "profileSetup": {
+    "title": "Set Up Your Profile",
+    "subtitle": "Providing this information helps the AI give you more personalized insights. This is optional.",
+    "saveButton": "Save and Continue"
   },
   "welcome": {
     "title": "Welcome to GoutCare AI!",
@@ -259,6 +278,15 @@
     },
     "hydration": {
       "title": "Log Hydration",
+      "typeLabel": "Type of Drink",
+      "types": {
+        "water": "Water",
+        "coffee": "Coffee",
+        "tea": "Tea",
+        "dairy": "Dairy",
+        "juice": "Juice",
+        "soda": "Soda"
+      },
       "amountLabel": "Amount ({{unit}})",
       "notesPlaceholder": "e.g., Water after workout"
     },
@@ -268,6 +296,11 @@
       "beer": "Beer",
       "soju": "Soju",
       "wine": "Wine",
+      "makgeolli": "Makgeolli",
+      "whiskey": "Whiskey",
+      "other": "Other",
+      "customTypeLabel": "Custom Type",
+      "customTypePlaceholder": "e.g., Highball",
       "amountLabel": "Amount ({{unit}})",
       "notesPlaceholder": "e.g., At a party"
     },
@@ -278,10 +311,28 @@
       "stressLabel": "Stress Level",
       "activityLabel": "Activity",
       "activityPlaceholder": "e.g., 30 min walk",
-      "notesPlaceholder": "Log your condition or any special events today."
+      "intensity": {
+          "label": "Exercise Intensity",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+      },
+      "sweat": {
+          "label": "Amount of Sweat",
+          "low": "Low",
+          "medium": "Medium",
+          "high": "High"
+      },
+      "notesPlaceholder": "Log your condition, any special events, or specific physical impact today."
     },
     "medication": {
       "title": "Log Medication",
+      "categoryLabel": "Category",
+      "categories": {
+        "prescription": "Prescription",
+        "supplement": "Supplement",
+        "other": "Other"
+      },
       "nameLabel": "Medication Name",
       "namePlaceholder": "e.g., Allopurinol",
       "dosageLabel": "Dosage (optional)",
@@ -296,7 +347,8 @@
       "history": "History",
       "favorites": "Favorites",
       "placeholder": "Enter food name or ingredients... (e.g., pork kimchi stew)",
-      "analyzeWithAi": "Analyze with AI"
+      "analyzeWithAi": "Analyze with AI",
+      "fastingLabel": "Intermittent Fasting Today"
     }
   }
 }

@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import type { LogEntry, HealthReport, Preferences, SymptomData, PurineIntakeData, HydrationData, WellnessData } from '../types';
 import Button from './common/Button';
 import Card from './common/Card';
-import { SparklesIcon, ChartBarIcon, LightbulbIcon, CheckCircleIcon, ArrowPathIcon, TrendingUpIcon, TrendingDownIcon } from './Icons';
+import { SparklesIcon, ChartBarIcon, LightbulbIcon, CheckCircleIcon, ArrowPathIcon, TrendingUpIcon, TrendingDownIcon, ShareIcon } from './Icons';
 import { formatWeight } from '../utils/units';
 import { useI18n } from '../hooks/useI18n';
 
@@ -58,9 +58,36 @@ const InitialState: React.FC<{ onGenerate: () => void, hasLogs: boolean }> = ({ 
 
 const ReportDisplay: React.FC<{ report: HealthReport }> = ({ report }) => {
     const { t } = useI18n();
+    const [copied, setCopied] = useState(false);
+
+    const handleShare = () => {
+        const reportText = `
+*${t('report.overallSummary')}*
+${report.overallSummary}
+
+*${t('report.keyFindings')}*
+${report.keyFindings.map(f => `- ${f.title}: ${f.finding} (${t('report.recommendation')}: ${f.recommendation})`).join('\n')}
+
+*${t('report.positiveHabits')}*
+${report.positiveHabits.map(h => `- ${h.title}: ${h.description}`).join('\n')}
+
+*${t('report.areasForImprovement')}*
+${report.areasForImprovement.map(a => `- ${a.title}: ${a.description}`).join('\n')}
+        `.trim();
+
+        navigator.clipboard.writeText(reportText).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
     return (
         <div className="space-y-6">
-             <Card className="bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-slate-800 dark:to-slate-900">
+             <Card className="bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-slate-800 dark:to-slate-900 relative">
+                 <Button variant="secondary" size="sm" onClick={handleShare} className="absolute top-4 right-4 !px-2">
+                    {copied ? <CheckCircleIcon className="w-5 h-5 text-green-500"/> : <ShareIcon className="w-5 h-5" />}
+                    <span className="ml-2">{copied ? t('report.copied') : t('report.share')}</span>
+                 </Button>
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">{t('report.overallSummary')}</h3>
                 <p className="text-slate-600 dark:text-slate-400">{report.overallSummary}</p>
             </Card>
@@ -85,13 +112,13 @@ const ReportDisplay: React.FC<{ report: HealthReport }> = ({ report }) => {
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card>
                     <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center">
-                        <CheckCircleIcon className="w-6 h-6 mr-2 text-green-500" />
+                        <TrendingUpIcon className="w-6 h-6 mr-2 text-green-500" />
                         {t('report.positiveHabits')}
                     </h3>
                     <ul className="space-y-3">
                         {report.positiveHabits.map((item, index) => (
                            <li key={index} className="flex items-start">
-                                <CheckCircleIcon className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0" filled />
+                                <CheckCircleIcon className="w-5 h-5 mr-3 mt-1 text-green-500 flex-shrink-0" />
                                 <div>
                                     <p className="font-semibold text-slate-700 dark:text-slate-200">{item.title}</p>
                                     <p className="text-sm text-slate-500 dark:text-slate-400">{item.description}</p>
@@ -122,6 +149,22 @@ const ReportDisplay: React.FC<{ report: HealthReport }> = ({ report }) => {
     );
 };
 
+const Tooltip: React.FC<{ visible: boolean; x: number; y: number; content: string; parentRef: React.RefObject<HTMLDivElement>}> = ({ visible, x, y, content, parentRef }) => {
+    if (!visible || !parentRef.current) return null;
+    const parentRect = parentRef.current.getBoundingClientRect();
+    const relativeX = x - parentRect.left;
+    const relativeY = y - parentRect.top;
+
+    return (
+        <div 
+            className="absolute bg-slate-800 text-white text-xs rounded-md px-2 py-1 pointer-events-none transition-opacity duration-200 z-20"
+            style={{ left: relativeX, top: relativeY, transform: 'translate(-50%, -120%)', opacity: visible ? 1 : 0 }}
+        >
+            {content}
+        </div>
+    );
+};
+
 
 const TrendChartCard: React.FC<{ title: string; children: React.ReactNode; avgValue: string; trend: 'up' | 'down' | 'neutral' }> = ({ title, children, avgValue, trend }) => {
     const { t } = useI18n();
@@ -147,28 +190,45 @@ const TrendChartCard: React.FC<{ title: string; children: React.ReactNode; avgVa
                 )}
             </div>
         </div>
-        <div className="h-32">
+        <div className="h-32 relative">
             {children}
         </div>
     </Card>
 )};
 
-const SimpleBarChart: React.FC<{ data: { label: string, value: number }[]; goal?: number; color: string; }> = ({ data, goal, color }) => {
+const SimpleBarChart: React.FC<{ data: { label: string, value: number }[]; goal?: number; color: string; unit?: string; }> = ({ data, goal, color, unit = '' }) => {
     const { t } = useI18n();
+    const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    const chartRef = React.useRef<HTMLDivElement>(null);
+    
     const maxValue = Math.max(...data.map(d => d.value), goal || 0) * 1.2;
     if (maxValue === 0) return <div className="h-full flex items-center justify-center text-sm text-slate-400">{t('report.trends.noData')}</div>;
 
+    const handleMouseOver = (e: React.MouseEvent, content: string) => {
+        setTooltip({ visible: true, content, x: e.clientX, y: e.clientY });
+    };
+
+    const handleMouseOut = () => {
+        setTooltip(prev => ({ ...prev, visible: false }));
+    };
+
     return (
-        <div className="h-full w-full flex items-end justify-around gap-1 relative pt-4">
+        <div className="h-full w-full flex items-end justify-around gap-1 relative pt-4" ref={chartRef}>
+            <Tooltip {...tooltip} parentRef={chartRef} />
             {goal && (
-                <div className="absolute top-0 left-0 w-full border-b-2 border-dashed border-green-500 dark:border-green-400" style={{ bottom: `${(goal / maxValue) * 100}%` }}>
+                <div className="absolute top-0 left-0 w-full border-b-2 border-dashed border-green-500 dark:border-green-400 z-0" style={{ bottom: `${(goal / maxValue) * 100}%` }}>
                     <span className="absolute -top-3 right-0 text-xs text-green-600 dark:text-green-300 font-semibold bg-green-100 dark:bg-green-900 px-1 rounded">{t('report.trends.goal')}</span>
                 </div>
             )}
             {data.map((d, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group">
+                <div key={i} className="flex-1 flex flex-col items-center justify-end h-full group z-10">
                     <div className="w-full h-full flex items-end">
-                       <div className={`w-full ${color} rounded-t-md transition-all duration-300 group-hover:opacity-80`} style={{ height: `${(d.value / maxValue) * 100}%` }}></div>
+                       <div 
+                         className={`w-full ${color} rounded-t-md transition-all duration-300 group-hover:opacity-80`} 
+                         style={{ height: `${(d.value / maxValue) * 100}%` }}
+                         onMouseMove={(e) => handleMouseOver(e, `${d.label}: ${d.value.toFixed(0)}${unit}`)}
+                         onMouseLeave={handleMouseOut}
+                       ></div>
                     </div>
                     <span className="text-xs mt-1 text-slate-500 dark:text-slate-400">{d.label}</span>
                 </div>
@@ -177,8 +237,11 @@ const SimpleBarChart: React.FC<{ data: { label: string, value: number }[]; goal?
     );
 };
 
-const SimpleLineChart: React.FC<{ data: { label: string, value: number | null }[]; colorClass: string }> = ({ data, colorClass }) => {
+const SimpleLineChart: React.FC<{ data: { label: string, value: number | null }[]; colorClass: string, unit?: string; }> = ({ data, colorClass, unit = '' }) => {
     const { t } = useI18n();
+    const [tooltip, setTooltip] = useState({ visible: false, content: '', x: 0, y: 0 });
+    const chartRef = React.useRef<HTMLDivElement>(null);
+    
     const pointsWithValue = data.map((d, i) => ({ ...d, index: i })).filter(d => d.value !== null);
     if (pointsWithValue.length < 2) return <div className="h-full flex items-center justify-center text-sm text-slate-400">{t('report.trends.notEnoughData')}</div>;
     
@@ -187,17 +250,45 @@ const SimpleLineChart: React.FC<{ data: { label: string, value: number | null }[
     const maxValue = Math.max(...validValues);
     const range = maxValue - minValue || 1;
 
-    const points = pointsWithValue.map(p => {
+    const getCoords = (p: typeof pointsWithValue[0]) => {
         const x = (p.index / (data.length - 1)) * 100;
-        const y = 100 - ((p.value! - minValue) / range) * 100;
-        return `${x},${y}`;
+        const y = 100 - (((p.value ?? minValue) - minValue) / range) * 80 - 10; // Add padding
+        return {x, y};
+    }
+    
+    const path = pointsWithValue.map((p, i) => {
+        const {x, y} = getCoords(p);
+        return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
     }).join(' ');
+
+    const handleMouseMove = (e: React.MouseEvent, content: string) => {
+        setTooltip({ visible: true, content, x: e.clientX, y: e.clientY });
+    };
+
+    const handleMouseLeave = () => {
+        setTooltip(prev => ({ ...prev, visible: false }));
+    };
     
     return (
-        <div className="h-full w-full flex items-end justify-around relative">
-            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0">
-                <polyline points={points} fill="none" className={colorClass} strokeWidth="2" />
+        <div className="h-full w-full relative" ref={chartRef}>
+            <Tooltip {...tooltip} parentRef={chartRef} />
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full absolute inset-0 overflow-visible">
+                <path d={path} fill="none" className={colorClass} strokeWidth="0.5" strokeLinejoin="round" strokeLinecap="round" />
             </svg>
+            {pointsWithValue.map((p, i) => {
+                const {x, y} = getCoords(p);
+                return (
+                     <div 
+                        key={i} 
+                        className="absolute w-4 h-4 -m-2 rounded-full cursor-pointer z-10"
+                        style={{ left: `${x}%`, top: `${y}%`}}
+                        onMouseMove={(e) => handleMouseMove(e, `${p.label}: ${p.value?.toFixed(1)}${unit}`)}
+                        onMouseLeave={handleMouseLeave}
+                     >
+                        <div className={`w-1.5 h-1.5 bg-current ${colorClass.replace('stroke-', '')} rounded-full absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`}></div>
+                     </div>
+                )
+            })}
         </div>
     );
 };
@@ -228,7 +319,6 @@ const HealthTrends: React.FC<{ logs: LogEntry[]; preferences: Preferences }> = (
         });
 
         const labels = Array.from(dateMap.keys()).map(dateStr => {
-             // Adding T00:00:00 ensures it's interpreted as local time midnight, not UTC, preventing off-by-one-day errors in some timezones.
              const safeDate = new Date(dateStr + 'T00:00:00');
              return safeDate.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' });
         });
@@ -255,17 +345,6 @@ const HealthTrends: React.FC<{ logs: LogEntry[]; preferences: Preferences }> = (
             const weightLog = dayLogs.filter(l => l.type === 'wellness' && (l.data as WellnessData).weight).pop();
             return { value: weightLog ? (weightLog.data as WellnessData).weight! : null };
         });
-        
-        // Fill null weight values with the last known weight
-        let lastKnownWeight: number | null = null;
-        for (let i = 0; i < weightData.length; i++) {
-            if (weightData[i].value !== null) {
-                lastKnownWeight = weightData[i].value;
-            } else if (lastKnownWeight !== null) {
-                // Do not forward-fill, show gaps
-            }
-        }
-
 
         const createChartData = (data: {value: number | null}[]) => data.map((d, i) => ({ label: labels[i], value: d.value }));
 
@@ -315,10 +394,10 @@ const HealthTrends: React.FC<{ logs: LogEntry[]; preferences: Preferences }> = (
                     <SimpleBarChart data={chartData.purine as {label: string, value: number}[]} color="bg-yellow-500" goal={preferences.dailyPurineGoal} />
                 </TrendChartCard>
                 <TrendChartCard title={t('report.trends.hydration')} avgValue={`${avgHydration.toFixed(0)}ml`} trend={calculateTrend(chartData.hydration) === 'up' ? 'down' : 'up'}>
-                    <SimpleBarChart data={chartData.hydration as {label: string, value: number}[]} goal={preferences.dailyFluidGoal} color="bg-sky-500" />
+                    <SimpleBarChart data={chartData.hydration as {label: string, value: number}[]} goal={preferences.dailyFluidGoal} color="bg-sky-500" unit="ml" />
                 </TrendChartCard>
                 <TrendChartCard title={t('report.trends.weight')} avgValue={lastWeight ? formatWeight(lastWeight, preferences.weightUnit) : '-'} trend={calculateTrend(chartData.weight)}>
-                    <SimpleLineChart data={chartData.weight} colorClass="stroke-green-500" />
+                    <SimpleLineChart data={chartData.weight} colorClass="stroke-green-500" unit={preferences.weightUnit} />
                 </TrendChartCard>
             </div>
         </div>
@@ -335,7 +414,7 @@ interface ReportPanelProps {
 
 const ReportPanel: React.FC<ReportPanelProps> = ({ logs, preferences, report, isLoading, onGenerateReport }) => {
     return (
-        <div className="max-w-4xl mx-auto space-y-8">
+        <div className="max-w-4xl mx-auto w-full space-y-8">
             <HealthTrends logs={logs} preferences={preferences} />
             <div className="border-t border-slate-200 dark:border-slate-700 my-8"></div>
             {isLoading ? (

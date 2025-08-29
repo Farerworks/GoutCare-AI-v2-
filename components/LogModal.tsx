@@ -5,9 +5,10 @@ import { LogType, LogData, SymptomData, MedicationData, WellnessData, Preference
 import Button from './common/Button';
 import Spinner from './common/Spinner';
 import { getLogIcon } from '../utils/logUtils';
-import { CloseIcon, SymptomIcon, MedicationIcon, HeartIcon, CameraIcon, PlusIcon, ChevronLeftIcon, ImageIcon, XIcon, WaterDropIcon, AlcoholIcon, BeerIcon, SojuIcon, WineIcon, ScaleIcon, MoonIcon, FaceFrownIcon, RunningIcon, BeakerIcon, StarIcon, SparklesIcon, BookOpenIcon } from './Icons';
+import { CloseIcon, SymptomIcon, MedicationIcon, HeartIcon, CameraIcon, PlusIcon, ChevronLeftIcon, ImageIcon, XIcon, WaterDropIcon, AlcoholIcon, BeerIcon, SojuIcon, WineIcon, ScaleIcon, MoonIcon, FaceFrownIcon, RunningIcon, BeakerIcon, StarIcon, SparklesIcon, BookOpenIcon, CoffeeIcon, TeaIcon, MilkIcon, JuiceIcon, SodaIcon, WhiskeyIcon, MakgeolliIcon } from './Icons';
 import { analyzeMealFromText } from '../services/geminiService';
 import { useI18n } from '../hooks/useI18n';
+import { lbsToKg } from '../utils/units';
 
 interface LogModalProps {
   date: Date;
@@ -172,14 +173,35 @@ const HydrationForm: React.FC<{ onSubmit: (data: HydrationData) => void; prefere
     const { t } = useI18n();
     const [amount, setAmount] = useState(250);
     const [notes, setNotes] = useState('');
+    const [drinkType, setDrinkType] = useState<HydrationData['drinkType']>('water');
+
+    const drinkTypes: { id: NonNullable<HydrationData['drinkType']>, label: string, icon: React.ReactNode }[] = [
+        { id: 'water', label: t('logModal.hydration.types.water'), icon: <WaterDropIcon /> },
+        { id: 'coffee', label: t('logModal.hydration.types.coffee'), icon: <CoffeeIcon /> },
+        { id: 'tea', label: t('logModal.hydration.types.tea'), icon: <TeaIcon /> },
+        { id: 'dairy', label: t('logModal.hydration.types.dairy'), icon: <MilkIcon /> },
+        { id: 'juice', label: t('logModal.hydration.types.juice'), icon: <JuiceIcon /> },
+        { id: 'soda', label: t('logModal.hydration.types.soda'), icon: <SodaIcon /> },
+    ];
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit({ amount, notes });
+        onSubmit({ amount, notes, drinkType });
     };
 
     return (
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+             <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.hydration.typeLabel')}</label>
+                <div className="grid grid-cols-3 gap-2">
+                     {drinkTypes.map(item => (
+                        <button type="button" key={item.id} onClick={() => setDrinkType(item.id)} className={`p-2 rounded-lg flex flex-col items-center justify-center transition-colors ${drinkType === item.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-600'}`}>
+                           <div className="w-6 h-6 mb-1">{item.icon}</div>
+                           <span className="text-xs font-semibold">{item.label}</span>
+                        </button>
+                    ))}
+                </div>
+            </div>
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.hydration.amountLabel', { unit: preferences.fluidUnit })}</label>
                 <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" required/>
@@ -200,7 +222,8 @@ const HydrationForm: React.FC<{ onSubmit: (data: HydrationData) => void; prefere
 
 const AlcoholForm: React.FC<{ onSubmit: (data: AlcoholData) => void; preferences: Preferences }> = ({ onSubmit, preferences }) => {
     const { t } = useI18n();
-    const [type, setType] = useState('Beer');
+    const [selectedType, setSelectedType] = useState('Beer');
+    const [customType, setCustomType] = useState('');
     const [amount, setAmount] = useState(500);
     const [notes, setNotes] = useState('');
 
@@ -208,11 +231,15 @@ const AlcoholForm: React.FC<{ onSubmit: (data: AlcoholData) => void; preferences
         { name: t('logModal.alcohol.beer'), icon: <BeerIcon/>, defaultAmount: 500, id: 'Beer' },
         { name: t('logModal.alcohol.soju'), icon: <SojuIcon/>, defaultAmount: 180, id: 'Soju' },
         { name: t('logModal.alcohol.wine'), icon: <WineIcon/>, defaultAmount: 150, id: 'Wine' },
+        { name: t('logModal.alcohol.makgeolli'), icon: <MakgeolliIcon/>, defaultAmount: 300, id: 'Makgeolli' },
+        { name: t('logModal.alcohol.whiskey'), icon: <WhiskeyIcon/>, defaultAmount: 45, id: 'Whiskey' },
+        { name: t('logModal.alcohol.other'), icon: <PlusIcon/>, defaultAmount: 100, id: 'Other' },
     ];
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit({ type, amount, notes });
+        const finalType = selectedType === 'Other' ? (customType || 'Other') : selectedType;
+        onSubmit({ type: finalType, amount, notes });
     };
 
     return (
@@ -221,13 +248,19 @@ const AlcoholForm: React.FC<{ onSubmit: (data: AlcoholData) => void; preferences
                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.alcohol.typeLabel')}</label>
                 <div className="grid grid-cols-3 gap-2">
                     {alcoholTypes.map(item => (
-                        <button type="button" key={item.id} onClick={() => { setType(item.id); setAmount(item.defaultAmount); }} className={`p-2 rounded-lg flex flex-col items-center justify-center transition-colors ${type === item.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-600'}`}>
+                        <button type="button" key={item.id} onClick={() => { setSelectedType(item.id); setAmount(item.defaultAmount); }} className={`p-2 rounded-lg flex flex-col items-center justify-center transition-colors ${selectedType === item.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-600'}`}>
                            <div className="w-6 h-6 mb-1">{item.icon}</div>
-                           <span className="text-sm font-semibold">{item.name}</span>
+                           <span className="text-xs font-semibold">{item.name}</span>
                         </button>
                     ))}
                 </div>
             </div>
+            {selectedType === 'Other' && (
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.alcohol.customTypeLabel')}</label>
+                    <input type="text" value={customType} onChange={e => setCustomType(e.target.value)} placeholder={t('logModal.alcohol.customTypePlaceholder')} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" required/>
+                </div>
+            )}
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.alcohol.amountLabel', { unit: preferences.fluidUnit })}</label>
                 <input type="number" value={amount} onChange={e => setAmount(Number(e.target.value))} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" required/>
@@ -248,29 +281,48 @@ const WellnessForm: React.FC<{ onSubmit: (data: WellnessData) => void; preferenc
     const [stressLevel, setStressLevel] = useState<WellnessData['stressLevel'] | undefined>(undefined);
     const [activity, setActivity] = useState('');
     const [notes, setNotes] = useState('');
+    const [activityIntensity, setActivityIntensity] = useState<WellnessData['activityIntensity']>();
+    const [sweatLoss, setSweatLoss] = useState<WellnessData['sweatLoss']>();
+
+    const intensityLevels: { id: NonNullable<WellnessData['activityIntensity']>, label: string }[] = [
+        { id: 'low', label: t('logModal.wellness.intensity.low')},
+        { id: 'medium', label: t('logModal.wellness.intensity.medium')},
+        { id: 'high', label: t('logModal.wellness.intensity.high')}
+    ];
+    const sweatLevels: { id: NonNullable<WellnessData['sweatLoss']>, label: string }[] = [
+        { id: 'low', label: t('logModal.wellness.sweat.low')},
+        { id: 'medium', label: t('logModal.wellness.sweat.medium')},
+        { id: 'high', label: t('logModal.wellness.sweat.high')}
+    ];
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        const weightValue = parseFloat(weight);
+        const weightInKg = !isNaN(weightValue) && weightValue > 0
+            ? (preferences.weightUnit === 'lbs' ? lbsToKg(weightValue) : weightValue)
+            : undefined;
+
         onSubmit({
-            weight: weight ? Number(weight) : undefined,
+            weight: weightInKg,
             sleepHours: sleepHours ? Number(sleepHours) : undefined,
             stressLevel,
             activity: activity || undefined,
-            notes: notes || undefined
+            notes: notes || undefined,
+            activityIntensity,
+            sweatLoss,
         });
     };
 
     return (
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.wellness.weightLabel', { unit: preferences.weightUnit })}</label>
-                    <input type="number" step="0.1" value={weight} onChange={e => setWeight(e.target.value)} placeholder="75.5" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
-                </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.wellness.sleepLabel')}</label>
-                    <input type="number" step="0.5" value={sleepHours} onChange={e => setSleepHours(e.target.value)} placeholder="7.5" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
-                </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.wellness.weightLabel', { unit: preferences.weightUnit })}</label>
+                <input type="number" step="0.1" value={weight} onChange={e => setWeight(e.target.value)} placeholder="75.5" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
+            </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.wellness.sleepLabel')}</label>
+                <input type="number" step="0.5" value={sleepHours} onChange={e => setSleepHours(e.target.value)} placeholder="7.5" className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
             </div>
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.wellness.stressLabel')}</label>
@@ -283,6 +335,22 @@ const WellnessForm: React.FC<{ onSubmit: (data: WellnessData) => void; preferenc
              <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.wellness.activityLabel')}</label>
                 <input type="text" value={activity} onChange={e => setActivity(e.target.value)} placeholder={t('logModal.wellness.activityPlaceholder')} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"/>
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.wellness.intensity.label')}</label>
+                <div className="flex rounded-lg shadow-sm">
+                    {intensityLevels.map(level => (
+                        <button type="button" key={level.id} onClick={() => setActivityIntensity(level.id)} className={`flex-1 px-4 py-2 text-sm font-semibold first:rounded-l-lg last:rounded-r-lg transition-colors ${activityIntensity === level.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{level.label}</button>
+                    ))}
+                </div>
+            </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.wellness.sweat.label')}</label>
+                <div className="flex rounded-lg shadow-sm">
+                    {sweatLevels.map(level => (
+                        <button type="button" key={level.id} onClick={() => setSweatLoss(level.id)} className={`flex-1 px-4 py-2 text-sm font-semibold first:rounded-l-lg last:rounded-r-lg transition-colors ${sweatLoss === level.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{level.label}</button>
+                    ))}
+                </div>
             </div>
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.notesLabelFull')}</label>
@@ -303,6 +371,7 @@ const MedicationForm: React.FC<{
     const [timeOfDay, setTimeOfDay] = useState<'morning' | 'lunch' | 'dinner' | 'bedtime'>('morning');
     const [dosage, setDosage] = useState('');
     const [unit, setUnit] = useState('');
+    const [category, setCategory] = useState<MedicationData['category']>('prescription');
 
     const medicationSuggestions = useMemo(() => myMedications.map(m => m.name), [myMedications]);
     
@@ -311,6 +380,12 @@ const MedicationForm: React.FC<{
         { id: 'lunch', label: t('timeOfDay.lunch') },
         { id: 'dinner', label: t('timeOfDay.dinner') },
         { id: 'bedtime', label: t('timeOfDay.bedtime') },
+    ];
+    
+    const categoryOptions: { id: NonNullable<MedicationData['category']>, label: string }[] = [
+        { id: 'prescription', label: t('logModal.medication.categories.prescription') },
+        { id: 'supplement', label: t('logModal.medication.categories.supplement') },
+        { id: 'other', label: t('logModal.medication.categories.other') },
     ];
 
 
@@ -329,11 +404,20 @@ const MedicationForm: React.FC<{
             intakeTime: new Date().toISOString(),
             dosage: dosage || undefined,
             unit: unit || undefined,
+            category
         });
     };
 
     return (
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+             <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('logModal.medication.categoryLabel')}</label>
+                <div className="flex rounded-lg shadow-sm">
+                    {categoryOptions.map(cat => (
+                         <button type="button" key={cat.id} onClick={() => setCategory(cat.id)} className={`flex-1 px-4 py-2 text-sm font-semibold first:rounded-l-lg last:rounded-r-lg transition-colors ${category === cat.id ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{cat.label}</button>
+                    ))}
+                </div>
+            </div>
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('logModal.medication.nameLabel')}</label>
                 <AutocompleteInput value={name} onChange={setName} suggestions={medicationSuggestions} placeholder={t('logModal.medication.namePlaceholder')} required />
@@ -372,6 +456,7 @@ const PurineIntakeForm: React.FC<{
     const [tab, setTab] = useState<'history' | 'favorites' | 'new'>('new');
     const [selectedMeal, setSelectedMeal] = useState<MealAnalysis | null>(null);
     const [timeOfDay, setTimeOfDay] = useState<'breakfast' | 'lunch' | 'dinner' | 'snack'>('lunch');
+    const [intermittentFasting, setIntermittentFasting] = useState(false);
 
     const [text, setText] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -401,7 +486,7 @@ const PurineIntakeForm: React.FC<{
 
     const handleSubmit = () => {
         if (selectedMeal) {
-            onSubmit({ ...selectedMeal, timeOfDay });
+            onSubmit({ ...selectedMeal, timeOfDay, intermittentFasting });
         }
     };
 
@@ -426,6 +511,13 @@ const PurineIntakeForm: React.FC<{
                                     {t.label}
                                 </button>
                             ))}
+                        </div>
+                    </div>
+                     <div className="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
+                        <label htmlFor="fasting-toggle" className="text-sm font-medium text-slate-700 dark:text-slate-300">{t('logModal.diet.fastingLabel')}</label>
+                        <div className="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="fasting-toggle" className="sr-only peer" checked={intermittentFasting} onChange={() => setIntermittentFasting(!intermittentFasting)} />
+                            <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-500 peer-checked:bg-sky-600"></div>
                         </div>
                     </div>
                      <div className="flex gap-2 pt-2">

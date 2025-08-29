@@ -1,6 +1,7 @@
 
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import type { ChatMessage, Part, LogEntry, MealAnalysis, HealthReport, PlannedMeal, SymptomData, PurineIntakeData, WellnessData, HydrationData, AlcoholData, MealSuggestion } from '../types';
+import type { ChatMessage, Part, LogEntry, MealAnalysis, HealthReport, PlannedMeal, SymptomData, PurineIntakeData, WellnessData, HydrationData, AlcoholData, MealSuggestion, Preferences } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -75,12 +76,22 @@ End every response with the disclaimer: "${disclaimerText}"`;
     }
 };
 
-export const generateGoutForecast = async (logs: LogEntry[], chatHistory: ChatMessage[]): Promise<string> => {
+export const generateGoutForecast = async (logs: LogEntry[], chatHistory: ChatMessage[], preferences: Preferences): Promise<string> => {
     // For privacy, we create a summary on the client before sending to the model
     const recentLogs = logs.slice(0, 30); // Expanded to 30 for better context
     const recentChat = chatHistory.slice(-10);
+    
+    const { gender, birthYear, height, weight } = preferences;
+    let userProfile = 'User profile not provided.';
+    if (gender && birthYear && height && weight) {
+        const age = new Date().getFullYear() - birthYear;
+        const bmi = (weight / ((height / 100) ** 2)).toFixed(1);
+        userProfile = `User is a ${age}-year-old ${gender}, with a BMI of ${bmi}.`;
+    }
+
 
     const healthProfileSummary = `
+        User Profile: ${userProfile}
         Recent Logs: ${JSON.stringify(recentLogs.map(l => {
             const logData: any = { type: l.type, date: l.timestamp };
             if (l.type === 'wellness') logData.data = l.data as WellnessData;
@@ -103,7 +114,7 @@ export const generateGoutForecast = async (logs: LogEntry[], chatHistory: ChatMe
     SUMMARY: [Summarize the key reasons for the risk assessment in one sentence]
     FORECAST: [Provide 1-2 specific, actionable pieces of advice for today. Use a positive and supportive tone.]
 
-    Analyze patterns. If a symptom log includes high pain (>6) along with 'swelling' or 'redness', the risk is automatically 'High'. For example, if a user frequently logs 'poor sleep' or 'high stress' (in wellness logs) before a symptom flare-up, mention this as a possible personal trigger in the forecast. If hydration is low and they ate red meat, or if there is any alcohol log, the risk is 'Moderate' or 'High'. If they missed medication, risk increases. If they are eating well and staying hydrated, risk is 'Low'.
+    Analyze patterns. If a symptom log includes high pain (>6) along with 'swelling' or 'redness', the risk is automatically 'High'. For example, if a user frequently logs 'poor sleep' or 'high stress' (in wellness logs) before a symptom flare-up, mention this as a possible personal trigger in the forecast. If hydration is low and they ate red meat, or if there is any alcohol log, the risk is 'Moderate' or 'High'. If they missed medication, risk increases. If they are eating well and staying hydrated, risk is 'Low'. If available, consider the user's profile (age, gender, BMI) in your risk assessment. For example, a higher BMI can increase baseline risk.
     Do not give medical advice. Offer gentle tips linked to their data.
     
     Example Output:

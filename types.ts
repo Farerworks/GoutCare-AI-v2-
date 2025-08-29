@@ -19,6 +19,7 @@ export interface MedicationData {
   intakeTime: string; // ISO String
   notes?: string;
   photo?: string; // base64 encoded image
+  category?: 'prescription' | 'supplement' | 'other';
 }
 
 export interface MedicationInfo {
@@ -39,6 +40,7 @@ export interface DietData {
 export interface HydrationData {
   amount: number; // in mL
   notes?: string;
+  drinkType?: 'water' | 'coffee' | 'tea' | 'dairy' | 'juice' | 'soda' | 'other';
 }
 
 export interface AlcoholData {
@@ -53,6 +55,8 @@ export interface WellnessData {
     stressLevel?: 1 | 2 | 3 | 4 | 5;
     activity?: string; // e.g., "30 min walk"
     notes?: string; // For memo integration
+    activityIntensity?: 'low' | 'medium' | 'high';
+    sweatLoss?: 'low' | 'medium' | 'high';
 }
 
 // AI Meal Analyzer types
@@ -78,6 +82,7 @@ export interface MealAnalysis {
 
 export interface PurineIntakeData extends MealAnalysis {
     timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+    intermittentFasting?: boolean;
 }
 
 // AI Meal Planner type
@@ -143,6 +148,11 @@ export interface Preferences {
   fluidUnit: 'ml' | 'oz';
   dailyFluidGoal: number; // in ml
   dailyPurineGoal: number;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
+  birthYear?: number;
+  height?: number; // in cm
+  weight?: number; // in kg
+  profileComplete?: boolean;
 }
 
 // Navigation Type

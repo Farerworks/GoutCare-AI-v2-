@@ -1,5 +1,5 @@
-import React, { useRef, useState } from 'react';
-import { GoutIcon, DownloadIcon, UploadIcon, ResetIcon, SettingsIcon, ShareIcon, CheckIcon } from './Icons';
+import React, { useRef } from 'react';
+import { GoutIcon, DownloadIcon, UploadIcon, ResetIcon, SettingsIcon } from './Icons';
 import { useI18n } from '../hooks/useI18n';
 
 interface HeaderProps {
@@ -12,38 +12,10 @@ interface HeaderProps {
 const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSettings }) => {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isCopied, setIsCopied] = useState(false);
 
   const handleImportClick = () => {
     fileInputRef.current?.click();
   };
-
-  const handleShare = async () => {
-    const shareData = {
-      title: 'GoutCare AI',
-      text: t('header.shareText'),
-      url: window.location.href,
-    };
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-      } else {
-        throw new Error('Web Share API not supported');
-      }
-    } catch (err) {
-      // Fallback to clipboard
-      try {
-        await navigator.clipboard.writeText(window.location.href);
-        setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
-      } catch (clipboardErr) {
-        console.error('Failed to copy to clipboard', clipboardErr);
-        alert(t('errors.clipboardCopyFailed'));
-      }
-    }
-  };
-
 
   return (
     <header className="bg-white dark:bg-slate-800 shadow-md sticky top-0 z-10 flex-shrink-0">
@@ -58,9 +30,6 @@ const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSett
           </div>
           <div className="flex items-center space-x-1">
               <input type="file" accept=".json" ref={fileInputRef} onChange={onImport} className="hidden" />
-               <button onClick={handleShare} aria-label={t('header.buttons.share')} className={`p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 ${isCopied ? '!text-green-500' : ''}`}>
-                  {isCopied ? <CheckIcon className="w-5 h-5"/> : <ShareIcon className="w-5 h-5"/>}
-              </button>
               <button onClick={onOpenSettings} aria-label={t('header.buttons.settings')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
                   <SettingsIcon className="w-5 h-5"/>
               </button>

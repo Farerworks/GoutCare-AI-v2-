@@ -1,8 +1,10 @@
-import React from 'react';
+
+
+import React, { useState } from 'react';
 import type { Preferences } from '../types';
 import Button from './common/Button';
 import { CloseIcon } from './Icons';
-import { mlToOz, ozToMl } from '../utils/units';
+import { mlToOz, ozToMl, kgToLbs, lbsToKg } from '../utils/units';
 import { useI18n } from '../hooks/useI18n';
 
 interface SettingsModalProps {
@@ -14,10 +16,29 @@ interface SettingsModalProps {
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferences, setPreferences }) => {
   const { t } = useI18n();
+    
+  const [profile, setProfile] = useState({
+    gender: preferences.gender || 'prefer_not_to_say',
+    birthYear: preferences.birthYear || '',
+    height: preferences.height || '',
+    weight: preferences.weight
+      ? (preferences.weightUnit === 'lbs' ? kgToLbs(preferences.weight).toFixed(1) : preferences.weight.toFixed(1))
+      : '',
+  });
+  
   if (!isOpen) return null;
 
   const handleWeightUnitChange = (unit: 'kg' | 'lbs') => {
     setPreferences(prev => ({ ...prev, weightUnit: unit }));
+    // Also convert the profile weight state
+    const currentWeight = parseFloat(profile.weight as string);
+    if (!isNaN(currentWeight)) {
+      const weightInKg = unit === 'lbs' ? lbsToKg(currentWeight) : currentWeight;
+      setProfile(prev => ({
+        ...prev,
+        weight: unit === 'lbs' ? kgToLbs(weightInKg).toFixed(1) : weightInKg.toFixed(1)
+      }));
+    }
   };
 
   const handleFluidUnitChange = (unit: 'ml' | 'oz') => {
@@ -37,6 +58,24 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
     setPreferences(prev => ({ ...prev, dailyPurineGoal: value }));
   };
   
+  const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setProfile(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleSavePreferences = () => {
+    const weightValue = parseFloat(profile.weight as string) || 0;
+    const weightInKg = preferences.weightUnit === 'lbs' ? lbsToKg(weightValue) : weightValue;
+
+    setPreferences(prev => ({
+        ...prev,
+        gender: profile.gender as Preferences['gender'],
+        birthYear: profile.birthYear ? Number(profile.birthYear) : undefined,
+        height: profile.height ? Number(profile.height) : undefined,
+        weight: weightInKg > 0 ? weightInKg : undefined,
+    }));
+    onClose();
+  };
+  
   const displayFluidGoal = (
     preferences.fluidUnit === 'ml'
       ? preferences.dailyFluidGoal
@@ -45,18 +84,47 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-auto relative transform transition-all" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md mx-auto relative transform transition-all animate-fade-in" onClick={(e) => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
           <CloseIcon />
         </button>
-        <div className="p-6">
+        <div className="p-6 max-h-[80vh] overflow-y-auto">
           <h2 className="text-xl font-bold text-center mb-6 text-slate-800 dark:text-slate-100">
             {t('settings.title')}
           </h2>
           
           <div className="space-y-6">
-            {/* Daily Goals */}
+
+            {/* Personal Profile */}
             <div className="space-y-4">
+               <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">{t('settings.personalProfile.title')}</h3>
+               <div>
+                  <label htmlFor="gender" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.personalProfile.gender')}</label>
+                  <select id="gender" name="gender" value={profile.gender} onChange={handleProfileChange} className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg">
+                      <option value="male">{t('settings.personalProfile.male')}</option>
+                      <option value="female">{t('settings.personalProfile.female')}</option>
+                      <option value="other">{t('settings.personalProfile.other')}</option>
+                      <option value="prefer_not_to_say">{t('settings.personalProfile.preferNotToSay')}</option>
+                  </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                  <div>
+                      <label htmlFor="birthYear" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.personalProfile.birthYear')}</label>
+                      <input id="birthYear" name="birthYear" type="number" value={profile.birthYear} onChange={handleProfileChange} placeholder="1990" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
+                  </div>
+                  <div>
+                      <label htmlFor="height" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.personalProfile.height')}</label>
+                      <input id="height" name="height" type="number" value={profile.height} onChange={handleProfileChange} placeholder="175" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
+                  </div>
+              </div>
+              <div>
+                  <label htmlFor="weight" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.personalProfile.weight', { unit: preferences.weightUnit })}</label>
+                  <input id="weight" name="weight" type="number" step="0.1" value={profile.weight} onChange={handleProfileChange} placeholder="75.5" className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg" />
+              </div>
+            </div>
+
+            {/* Daily Goals */}
+            <div className="space-y-4 pt-4 border-t">
               <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">{t('settings.myGoals')}</h3>
               <div>
                 <label htmlFor="fluidGoal" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.dailyFluidGoal', { unit: preferences.fluidUnit })}</label>
@@ -109,7 +177,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
             </div>
             
             <div className="pt-4 flex justify-end">
-                <Button onClick={onClose}>{t('settings.close')}</Button>
+                <Button onClick={handleSavePreferences}>{t('settings.save')}</Button>
             </div>
           </div>
         </div>
