@@ -1,0 +1,302 @@
+
+{
+  "header": {
+    "subtitle": "Gout Management",
+    "shareText": "Check out this Gout management app!",
+    "buttons": {
+      "share": "Share App",
+      "settings": "Settings",
+      "import": "Import Data",
+      "export": "Export Data",
+      "reset": "Reset Data"
+    }
+  },
+  "nav": {
+    "home": "Home",
+    "logs": "Logs",
+    "foodLab": "AI Food Lab",
+    "report": "AI Report",
+    "assistant": "AI Assistant"
+  },
+  "sidebar": {
+    "subtitle": "Gout Management AI"
+  },
+  "fab": {
+    "addNewLog": "Add new log"
+  },
+  "confirmations": {
+    "resetAllData": "Are you sure you want to delete all your data? This action cannot be undone.",
+    "importOverwrite": "Importing will overwrite your current data. Continue?"
+  },
+  "errors": {
+    "clipboardCopyFailed": "Could not copy link to clipboard.",
+    "invalidFileFormat": "Invalid file format.",
+    "fileReadError": "Error reading file.",
+    "aiAnalysisFailed": "AI analysis failed. Please try again.",
+    "analysisError": "An error occurred during analysis. Please check your network and try again.",
+    "aiMealPlanError": "The AI could not generate a meal plan. Please try again.",
+    "mealPlanGenerationError": "An error occurred while generating the meal plan.",
+    "aiMealSearchError": "The AI could not recommend any meals. Please try a different search term.",
+    "mealSearchError": "An error occurred while searching for meals."
+  },
+  "disclaimer": {
+    "medical": "Important: I am an AI assistant and not a medical professional. All information provided is for informational and educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult with your doctor or another qualified healthcare provider if you have any health concerns."
+  },
+  "riskLevels": {
+    "low": "Low",
+    "moderate": "Moderate",
+    "high": "High"
+  },
+  "timeOfDay": {
+    "morning": "Morning",
+    "lunch": "Lunch",
+    "dinner": "Dinner",
+    "bedtime": "Bedtime",
+    "breakfast": "Breakfast",
+    "snack": "Snack"
+  },
+  "dashboard": {
+    "latestReportSummary": "Latest AI Report Summary",
+    "dailySummary": {
+      "title": "Today's Summary",
+      "purineGoal": "Purine Goal",
+      "hydrationGoal": "Hydration Goal"
+    },
+    "riskAdvisor": {
+      "title": "Today's Gout Risk Forecast",
+      "refresh": "Refresh forecast"
+    },
+    "aiCoachNote": {
+      "title": "AI Coach Note"
+    },
+    "streak": {
+      "title": "{{count}}-Day Logging Streak!",
+      "subtitle": "That's amazing! Consistency is key to good health."
+    },
+    "recentLogs": {
+      "title": "Today's Logs",
+      "noLogs": "No logs for today.",
+      "symptom": "{{location}} pain: {{painLevel}}/10",
+      "medication": "Took {{medInfo}}",
+      "purineIntake": "Meal: {{mealName}} ({{score}} pts)",
+      "hydration": "Water: {{amount}}",
+      "alcohol": "Alcohol: {{type}} {{amount}}",
+      "wellness": "Wellness: {{parts}}",
+      "wellnessWeight": "Weight {{weight}}",
+      "wellnessSleep": "Sleep {{hours}}h",
+      "wellnessStress": "Stress {{level}}/5",
+      "wellnessActivity": "Activity",
+      "wellnessNote": "Note",
+      "unknown": "Unknown Log"
+    }
+  },
+  "logHistory": {
+    "logsForDate": "Logs for {{date}}",
+    "addLog": "Add Log",
+    "noLogs": "No Logs",
+    "noLogsDescription": "There are no records for this date.",
+    "groups": {
+        "symptoms": "Symptoms",
+        "meals": "Meals",
+        "medications": "Medications",
+        "hydration": "Hydration",
+        "alcohol": "Alcohol",
+        "wellness": "Wellness",
+        "totalPurine": "Total: {{score}} pts"
+    }
+  },
+  "chat": {
+    "title": "AI Assistant",
+    "subtitle": "Ask me anything!",
+    "sources": "Sources",
+    "suggestion1": "Recommend a gout-friendly diet",
+    "suggestion2": "How to lower my uric acid?",
+    "suggestion3": "Explain why beer is bad for gout",
+    "getMealIdea": "Get AI Meal Idea",
+    "getMealIdeaPrompt": "Recommend some healthy and delicious meal ideas for a gout patient.",
+    "attachImage": "Attach image",
+    "listening": "Listening...",
+    "placeholder": "Enter a message...",
+    "sendMessage": "Send message",
+    "webSearch": "Web Search"
+  },
+  "food": {
+    "overallPurineScore": "Overall Purine Score",
+    "dailyIntakeAnalysis": "AI Daily Intake Analysis",
+    "addToLog": "Add to Log",
+    "ingredientAnalysis": "Key Ingredient Analysis",
+    "aiRecommendations": "AI Recommendations",
+    "alternativeSuggestions": "Alternative Meal Suggestions",
+    "analyzeWithText": "Analyze with Text",
+    "analyzeWithImage": "Analyze with Image",
+    "choosePhoto": "Choose a photo",
+    "textPlaceholder": "Enter food name or ingredients...\n(e.g., Pork kimchi stew with rolled omelette)",
+    "imagePlaceholder": "Add an optional description for the photo...",
+    "requestAnalysis": "Request AI Analysis",
+    "mealComparison": "AI Meal Comparison",
+    "myMealLibrary": "My Meal Library",
+    "search": "Search",
+    "plan": "Plan",
+    "analyzeNew": "Analyze New",
+    "analyzeAnother": "Analyze Another",
+    "noHistory": "No analysis history.",
+    "noHistoryDescription": "Try analyzing a new meal.",
+    "purineScore": "Purine Score",
+    "compareSelected": "Compare Selected ({{count}})",
+    "mealPlannerTitle": "AI Meal Planner",
+    "mealPlannerDescription": "Tell the AI what ingredients you have or what you're craving, and it will suggest a gout-friendly meal plan.",
+    "mealPlannerPlaceholder": "e.g., I have chicken breast and tofu in my fridge. Recommend a dinner menu.",
+    "getAiMealPlan": "Get AI Meal Plan",
+    "aiRecommendedMealPlan": "AI Recommended Meal Plan",
+    "risk": "Risk",
+    "ingredients": "Ingredients",
+    "recipe": "Recipe",
+    "mealSearchTitle": "AI Meal Search",
+    "mealSearchDescription": "Search for what you want to eat, like \"low purine soup dishes\".",
+    "mealSearchPlaceholder": "e.g., Safe noodle dishes for lunch",
+    "getAiMealSuggestions": "Get AI Meal Suggestions",
+    "aiRecommendedMeals": "AI Recommended Meals",
+    "estPurineScore": "Est. Purine Score",
+    "clickForAnalysis": "Click on a meal you like to proceed with a detailed analysis.",
+    "backToLibrary": "Back to Library"
+  },
+  "report": {
+    "loadingTitle": "AI is analyzing your data...",
+    "loadingDescription": "Finding your personal health patterns from your past logs. Please wait a moment.",
+    "initialTitle": "AI Health Report",
+    "initialDescription": "Let our AI discover meaningful patterns hidden in your health logs. Uncover connections between your diet, symptoms, and lifestyle, and get personalized tips to manage your health better.",
+    "generateButton": "Analyze My Health Patterns",
+    "notEnoughData": "Not Enough Data to Analyze",
+    "notEnoughDataDescription": "A few logs are needed to generate a report.",
+    "overallSummary": "AI Overall Summary",
+    "keyFindings": "Key Findings",
+    "recommendation": "Recommendation",
+    "positiveHabits": "Positive Habits",
+    "areasForImprovement": "Areas for Improvement",
+    "trends": {
+      "title": "Weekly/Monthly Health Trends",
+      "7days": "7 Days",
+      "30days": "30 Days",
+      "painLevel": "Pain Level",
+      "purineIntake": "Purine Intake",
+      "hydration": "Hydration",
+      "weight": "Weight",
+      "periodAverage": "Period Average",
+      "increasing": "Increasing",
+      "decreasing": "Decreasing",
+      "noData": "No Data",
+      "notEnoughData": "Not enough data",
+      "goal": "Goal"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "myGoals": "My Goals",
+    "dailyFluidGoal": "Daily Fluid Intake Goal ({{unit}})",
+    "dailyPurineGoal": "Daily Purine Score Goal",
+    "unitSettings": "Unit Settings",
+    "weightUnit": "Weight Unit",
+    "kg": "Kilograms (kg)",
+    "lbs": "Pounds (lbs)",
+    "fluidUnit": "Fluid Unit",
+    "ml": "Milliliters (ml)",
+    "oz": "Ounces (oz)",
+    "close": "Close"
+  },
+  "welcome": {
+    "title": "Welcome to GoutCare AI!",
+    "subtitle": "Your AI partner for a healthier, gout-free day.",
+    "feature1Title": "AI Food Analysis",
+    "feature1Desc": "Analyze your meal's purine risk with just a photo and find healthier alternatives.",
+    "feature2Title": "Personalized Risk Forecast",
+    "feature2Desc": "Get today's gout risk forecast based on your logs and receive management tips.",
+    "feature3Title": "Effortless Health Logging",
+    "feature3Desc": "Easily and quickly log everything: meals, symptoms, medication, hydration, and more.",
+    "getStarted": "Get Started"
+  },
+  "quickLog": {
+    "title": "Quick Log",
+    "addLog": "Add Log",
+    "hydration": {
+      "title": "Log Hydration"
+    },
+    "diet": {
+      "title": "Log Diet",
+      "placeholder": "Enter food name or ingredients...",
+      "analyzeAndLog": "Analyze & Log with AI",
+      "favoritesRecents": "Favorites / Recents"
+    },
+    "medication": {
+      "title": "Log Medication",
+      "logIntake": "Log Intake"
+    },
+    "symptom": {
+      "title": "Log Symptom",
+      "locationLabel": "Pain Location",
+      "locationPlaceholder": "e.g., Right big toe",
+      "painLevelLabel": "Pain Level"
+    }
+  },
+  "logModal": {
+    "addLogTitle": "Add a Log ({{date}})",
+    "saveLog": "Save Log",
+    "notesLabel": "Notes (optional)",
+    "notesLabelFull": "Notes",
+    "timeOfDayLabel": "Time of Day",
+    "reselect": "Reselect",
+    "symptom": {
+      "title": "Log Symptom",
+      "locationLabel": "Pain Location",
+      "locationPlaceholder": "e.g., Right big toe",
+      "painLevelLabel": "Pain Level",
+      "detailsLabel": "Detailed Symptoms (optional)",
+      "swelling": "Swelling",
+      "redness": "Redness",
+      "warmth": "Warmth",
+      "notesPlaceholder": "Record any specific details.",
+      "attachPhotoLabel": "Attach Photo (optional)",
+      "choosePhoto": "Choose Photo"
+    },
+    "hydration": {
+      "title": "Log Hydration",
+      "amountLabel": "Amount ({{unit}})",
+      "notesPlaceholder": "e.g., Water after workout"
+    },
+    "alcohol": {
+      "title": "Log Alcohol",
+      "typeLabel": "Type of Alcohol",
+      "beer": "Beer",
+      "soju": "Soju",
+      "wine": "Wine",
+      "amountLabel": "Amount ({{unit}})",
+      "notesPlaceholder": "e.g., At a party"
+    },
+    "wellness": {
+      "title": "Log Wellness",
+      "weightLabel": "Weight ({{unit}})",
+      "sleepLabel": "Sleep (hours)",
+      "stressLabel": "Stress Level",
+      "activityLabel": "Activity",
+      "activityPlaceholder": "e.g., 30 min walk",
+      "notesPlaceholder": "Log your condition or any special events today."
+    },
+    "medication": {
+      "title": "Log Medication",
+      "nameLabel": "Medication Name",
+      "namePlaceholder": "e.g., Allopurinol",
+      "dosageLabel": "Dosage (optional)",
+      "dosagePlaceholder": "100",
+      "unitLabel": "Unit",
+      "unitPlaceholder": "mg",
+      "logIntake": "Log Intake"
+    },
+    "diet": {
+      "title": "Log Diet",
+      "newAnalysis": "New Analysis",
+      "history": "History",
+      "favorites": "Favorites",
+      "placeholder": "Enter food name or ingredients... (e.g., pork kimchi stew)",
+      "analyzeWithAi": "Analyze with AI"
+    }
+  }
+}

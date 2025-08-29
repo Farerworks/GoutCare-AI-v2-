@@ -1,30 +1,31 @@
 import React from 'react';
 import type { ActiveView } from '../types';
-import { GoutIcon, HomeIcon, CalendarIcon, ChatBubbleIcon, BeakerIcon } from './Icons';
+import { GoutIcon, HomeIcon, CalendarIcon, ChatBubbleIcon, BeakerIcon, ChartBarIcon } from './Icons';
+import { useI18n } from '../hooks/useI18n';
 
 interface SidebarProps {
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
 }
 
-const navItems = [
-  { id: 'dashboard', label: '홈', icon: <HomeIcon className="w-5 h-5" /> },
-  { id: 'calendar', label: '기록', icon: <CalendarIcon className="w-5 h-5" /> },
-  { id: 'food', label: '음식 분석', icon: <BeakerIcon className="w-5 h-5" /> },
-  { id: 'chat', label: 'AI 비서', icon: <ChatBubbleIcon className="w-5 h-5" /> },
-];
-
 const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView }) => {
+  const { t } = useI18n();
+  const navItems = [
+    { id: 'dashboard', label: t('nav.home'), icon: <HomeIcon className="w-5 h-5" /> },
+    { id: 'calendar', label: t('nav.logs'), icon: <CalendarIcon className="w-5 h-5" /> },
+    { id: 'food', label: t('nav.foodLab'), icon: <BeakerIcon className="w-5 h-5" /> },
+    { id: 'report', label: t('nav.report'), icon: <ChartBarIcon className="w-5 h-5" /> },
+    { id: 'chat', label: t('nav.assistant'), icon: <ChatBubbleIcon className="w-5 h-5" /> },
+  ];
+
   return (
     <aside className="hidden md:flex flex-col w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex-shrink-0">
       <div className="flex items-center space-x-3 h-16 px-4 border-b border-slate-200 dark:border-slate-700">
         <GoutIcon />
-        <div>
-            <h1 className="text-xl font-bold text-slate-800 dark:text-white leading-tight">
-              GoutCare AI
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-slate-400">통풍관리 AI</p>
-        </div>
+        <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+          <span>GoutCare AI</span>
+          <span className="text-sm font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300 px-2 py-0.5 rounded-full">v3</span>
+        </h1>
       </div>
       <nav className="flex-grow p-4">
         <ul className="space-y-2">

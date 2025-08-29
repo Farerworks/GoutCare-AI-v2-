@@ -1,441 +1,191 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
-import type { MealAnalysis, AnalyzedFoodItem } from '../types';
+
+
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import type { MealAnalysis, AnalyzedFoodItem, LogEntry, Preferences, PurineIntakeData, PlannedMeal, MealSuggestion } from '../types';
 import Card from './common/Card';
 import Button from './common/Button';
 import Spinner from './common/Spinner';
-import { analyzeMealFromImage, analyzeMealFromText, generateMealIdeas, generateMealComparison } from '../services/geminiService';
-import { CameraIcon, PencilIcon, LightbulbIcon, TrashIcon, ClipboardListIcon, XIcon, StarIcon, PlusCircleIcon, SparklesIcon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, BeakerIcon, CalendarIcon, MicrophoneIcon, ClipboardCheckIcon, CheckCircleIcon } from './Icons';
-
-const getRiskLevelColor = (level: MealAnalysis['overallRiskLevel']) => {
-    switch (level) {
-        case '낮음': return 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700';
-        case '주의': return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700';
-        case '높음': return 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700';
-        default: return 'bg-slate-100 dark:bg-slate-700';
-    }
-};
-
-const getPurineLevelColorForItem = (level: AnalyzedFoodItem['purineLevel']) => {
-    switch (level) {
-        case '낮음': return 'text-green-600 dark:text-green-400';
-        case '중간': return 'text-yellow-600 dark:text-yellow-400';
-        case '높음': return 'text-orange-600 dark:text-orange-400';
-        case '매우 높음': return 'text-red-600 dark:text-red-400';
-        default: return 'text-slate-500';
-    }
-};
-
-const ScoreGauge: React.FC<{ score: number; size?: 'sm' | 'md' }> = ({ score, size = 'md' }) => {
-    const isSmall = size === 'sm';
-    const radius = isSmall ? 30 : 50;
-    const strokeWidth = isSmall ? 6 : 10;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (score / 100) * circumference;
-    const scoreColor = score >= 75 ? 'stroke-red-500' : score >= 50 ? 'stroke-yellow-500' : 'stroke-green-500';
-
-    const width = isSmall ? 'w-20 h-20' : 'w-32 h-32 sm:w-40 sm:h-40';
-    const viewBox = isSmall ? '0 0 72 72' : '0 0 120 120';
-    const cx = isSmall ? 36 : 60;
-    const cy = isSmall ? 36 : 60;
-    const fontSizes = isSmall
-      ? { score: 'text-xl', total: 'text-xs' }
-      : { score: 'text-3xl sm:text-4xl', total: 'text-xs sm:text-sm' };
-
-    return (
-        <div className={`relative ${width}`}>
-            <svg className="w-full h-full" viewBox={viewBox}>
-                <circle className="text-slate-200 dark:text-slate-700" strokeWidth={strokeWidth} stroke="currentColor" fill="transparent" r={radius} cx={cx} cy={cy} />
-                <circle
-                    className={`${scoreColor} transition-all duration-1000 ease-in-out`}
-                    strokeWidth={strokeWidth}
-                    strokeDasharray={circumference}
-                    strokeDashoffset={offset}
-                    strokeLinecap="round"
-                    stroke="currentColor"
-                    fill="transparent"
-                    r={radius}
-                    cx={cx}
-                    cy={cy}
-                    transform={`rotate(-90 ${cx} ${cy})`}
-                />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className={`${fontSizes.score} font-bold ${scoreColor.replace('stroke-', 'text-')}`}>{score}</span>
-                {!isSmall && <span className={`${fontSizes.total} font-medium text-slate-500 dark:text-slate-400`}>/ 100</span>}
-            </div>
-        </div>
-    );
-};
-
-const AccordionSection: React.FC<{
-  title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  isOpen: boolean;
-  onToggle: () => void;
-}> = ({ title, icon, children, isOpen, onToggle }) => {
-  return (
-    <div className="border-t border-slate-200 dark:border-slate-700/50">
-      <button
-        onClick={onToggle}
-        className="flex justify-between items-center w-full py-4 text-left"
-      >
-        <div className="flex items-center text-md font-semibold text-slate-700 dark:text-slate-300">
-          {icon}
-          <span>{title}</span>
-        </div>
-        <ChevronDownIcon className={`w-5 h-5 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-      <div className={`overflow-hidden transition-all duration-300 ${isOpen ? 'max-h-screen' : 'max-h-0'}`}>
-        <div className="pb-4">
-          {children}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-
-const MealResult: React.FC<{
-    result: MealAnalysis;
-    isFavorite: boolean;
-    isAdded: boolean;
-    onToggleFavorite: () => void;
-    onPromptAdd: () => void;
-    onBackToList: () => void;
-}> = ({ result, isFavorite, isAdded, onToggleFavorite, onPromptAdd, onBackToList }) => {
-    const [accordionState, setAccordionState] = useState({ items: true, advice: true });
-
-    const handleAccordionToggle = (section: 'items' | 'advice') => {
-        setAccordionState(prev => ({ ...prev, [section]: !prev[section] }));
-    };
-
-    const handleAdd = () => {
-        onPromptAdd();
-    };
-    
-    return (
-    <div className="animate-fade-in space-y-4 lg:space-y-6 pb-24 lg:pb-0">
-        <button onClick={onBackToList} className="lg:hidden flex items-center text-sm text-sky-600 dark:text-sky-400 font-semibold mb-2">
-            <ChevronLeftIcon className="w-5 h-5" />
-            <span>기록 목록으로 돌아가기</span>
-        </button>
-
-        <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 dark:text-slate-100 text-center">{result.mealDescription}</h2>
-
-        <Card>
-            <div className="flex flex-col sm:flex-row items-center text-center sm:text-left gap-4">
-                <div className="flex-shrink-0">
-                    <ScoreGauge score={result.totalPurineScore} />
-                </div>
-                <div className="flex-grow">
-                     <div className={`inline-block px-3 py-1 mb-2 text-base font-bold rounded-lg border-2 ${getRiskLevelColor(result.overallRiskLevel)}`}>
-                        {result.overallRiskLevel}
-                     </div>
-                     <p className="mt-1 text-md font-semibold text-slate-700 dark:text-slate-300">{result.overallSummary}</p>
-                </div>
-            </div>
-        </Card>
-        
-        <Card className="!p-0">
-            <div className="p-4 sm:p-6 space-y-1">
-                <AccordionSection 
-                    title="개별 항목 분석" 
-                    icon={<ClipboardListIcon className="w-5 h-5 mr-2 text-slate-500" />}
-                    isOpen={accordionState.items}
-                    onToggle={() => handleAccordionToggle('items')}
-                >
-                    <ul className="space-y-3">
-                        {result.items.map((item, index) => (
-                            <li key={index} className="p-3 rounded-lg bg-slate-100 dark:bg-slate-800">
-                                <div className="flex justify-between items-start gap-2">
-                                    <div className="flex-grow">
-                                        <h5 className="font-bold text-slate-800 dark:text-slate-100">{item.foodName}</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{item.explanation}</p>
-                                    </div>
-                                    <div className="text-right flex-shrink-0">
-                                        <p className={`font-semibold text-sm ${getPurineLevelColorForItem(item.purineLevel)}`}>{item.purineLevel}</p>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">{item.purineAmount}</p>
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </AccordionSection>
-
-                <AccordionSection 
-                    title="AI 조언 및 대체 식품"
-                    icon={<LightbulbIcon className="w-5 h-5 mr-2 text-yellow-500" />}
-                    isOpen={accordionState.advice}
-                    onToggle={() => handleAccordionToggle('advice')}
-                >
-                     <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">{result.recommendations}</p>
-                     <div className="flex flex-wrap gap-2">
-                        {result.alternatives.map((alt, i) => (
-                            <span key={i} className="px-2.5 py-1 text-sm bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full">{alt}</span>
-                        ))}
-                    </div>
-                </AccordionSection>
-            </div>
-        </Card>
-
-        {/* Action Buttons */}
-        <div className="hidden lg:flex items-center justify-center gap-4 pt-2">
-            <Button onClick={handleAdd} variant={isAdded ? "secondary" : "primary"} size="md" disabled={isAdded} className="!w-48">
-                {isAdded ? <><CheckIcon className="w-5 h-5 mr-2" /> 추가 완료!</> : <><PlusCircleIcon className="w-5 h-5 mr-2" /> 오늘 식단에 추가</>}
-            </Button>
-            <button onClick={onToggleFavorite} className="p-3 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="즐겨찾기 추가/제거">
-                <StarIcon className={`w-6 h-6 ${isFavorite ? 'text-yellow-400' : 'text-slate-400'}`} filled={isFavorite} />
-            </button>
-        </div>
-        
-         {/* Mobile Sticky Action Bar */}
-        <div className="lg:hidden fixed bottom-16 left-0 right-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm p-4 border-t border-slate-200 dark:border-slate-700 z-10">
-            <div className="flex items-center justify-center gap-4">
-                <Button onClick={handleAdd} variant={isAdded ? "secondary" : "primary"} size="md" disabled={isAdded} className="flex-grow">
-                    {isAdded ? <><CheckIcon className="w-5 h-5 mr-2" /> 추가 완료!</> : <><PlusCircleIcon className="w-5 h-5 mr-2" /> 식단에 추가</>}
-                </Button>
-                <button onClick={onToggleFavorite} className="p-3 rounded-full bg-slate-200 dark:bg-slate-700 transition-colors" aria-label="즐겨찾기 추가/제거">
-                    <StarIcon className={`w-6 h-6 ${isFavorite ? 'text-yellow-400' : 'text-slate-400'}`} filled={isFavorite} />
-                </button>
-            </div>
-        </div>
-    </div>
-)};
-
-const MobileTabButton: React.FC<{ active: boolean; onClick: () => void; children: React.ReactNode; }> = ({ active, onClick, children }) => (
-    <button
-        onClick={onClick}
-        className={`flex-1 py-3 px-2 text-sm font-semibold border-b-2 transition-colors ${
-        active
-            ? 'border-sky-500 text-sky-600 dark:text-sky-400'
-            : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-        }`}
-    >
-        <div className="flex items-center justify-center space-x-2">
-            {children}
-        </div>
-    </button>
-);
-
-const MealTimeSelectionModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSelect: (time: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void;
-}> = ({ isOpen, onClose, onSelect }) => {
-    if (!isOpen) return null;
-
-    const mealTimes: { key: 'breakfast' | 'lunch' | 'dinner' | 'snack'; label: string }[] = [
-        { key: 'breakfast', label: '아침' },
-        { key: 'lunch', label: '점심' },
-        { key: 'dinner', label: '저녁' },
-        { key: 'snack', label: '간식/야식' },
-    ];
-
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs mx-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="p-6 text-center">
-                    <h3 className="text-lg font-semibold mb-2 text-slate-800 dark:text-slate-100">언제 드셨나요?</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">오늘 날짜로 기록됩니다.</p>
-                    <div className="grid grid-cols-2 gap-3">
-                        {mealTimes.map(time => (
-                            <Button key={time.key} variant="secondary" size="lg" className="h-16" onClick={() => onSelect(time.key)}>
-                                {time.label}
-                            </Button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const MealComparisonView: React.FC<{ items: MealAnalysis[]; onBack: () => void; }> = ({ items, onBack }) => {
-    const [summary, setSummary] = useState<string | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-
-    useEffect(() => {
-        const fetchComparison = async () => {
-            setIsLoading(true);
-            const result = await generateMealComparison(items);
-            setSummary(result);
-            setIsLoading(false);
-        };
-        fetchComparison();
-    }, [items]);
-
-    const gridColsClass = `grid-cols-${items.length}`;
-
-    return (
-        <div className="p-4 sm:p-6 animate-fade-in">
-            <Button onClick={onBack} variant="secondary" size="sm" className="mb-4">
-                <ChevronLeftIcon className="w-4 h-4 mr-2" />
-                뒤로가기
-            </Button>
-            <h2 className="text-2xl lg:text-3xl font-bold text-slate-800 dark:text-slate-100 text-center mb-6">AI 식단 비교 분석</h2>
-            <div className={`grid ${gridColsClass} gap-4`}>
-                {items.map(item => (
-                    <Card key={item.id} className="flex flex-col items-center text-center">
-                        <h3 className="font-bold text-md lg:text-lg mb-3 h-12 flex items-center justify-center">{item.mealDescription}</h3>
-                        <ScoreGauge score={item.totalPurineScore} size="sm" />
-                        <div className={`mt-3 px-2 py-0.5 text-sm font-bold rounded-md border ${getRiskLevelColor(item.overallRiskLevel)}`}>
-                            {item.overallRiskLevel}
-                        </div>
-                    </Card>
-                ))}
-            </div>
-            <Card className="mt-6">
-                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center">
-                    <SparklesIcon className="w-6 h-6 mr-2 text-yellow-400" />
-                    AI 최종 결론
-                </h3>
-                {isLoading ? (
-                    <div className="flex justify-center items-center p-4">
-                        <Spinner />
-                    </div>
-                ) : (
-                    <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{summary}</p>
-                )}
-            </Card>
-        </div>
-    );
-};
-
+import { analyzeMealFromImage, analyzeMealFromText, generateMealComparison, generateMealPlan, generateMealSuggestions } from '../services/geminiService';
+import { CameraIcon, PencilIcon, TrashIcon, XIcon, StarIcon, SparklesIcon, ChevronLeftIcon, BeakerIcon, ClipboardCheckIcon, DocumentTextIcon, ImageIcon, PlusIcon, LightbulbIcon, SearchIcon } from './Icons';
+import { useI18n } from '../hooks/useI18n';
 
 interface FoodAnalyzerPanelProps {
+    logs: LogEntry[];
+    preferences: Preferences;
     history: MealAnalysis[];
     setHistory: React.Dispatch<React.SetStateAction<MealAnalysis[]>>;
     favoriteMeals: MealAnalysis[];
     onToggleFavorite: (meal: MealAnalysis) => void;
     onAddToDailyLog: (meal: MealAnalysis, timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void;
-    onActionToAI: (text: string) => void;
 }
 
-const FoodAnalyzerPanel: React.FC<FoodAnalyzerPanelProps> = ({ history, setHistory, favoriteMeals, onToggleFavorite, onAddToDailyLog, onActionToAI }) => {
-    const [listFilter, setListFilter] = useState<'all' | 'favorites'>('all');
-    const [mobileTab, setMobileTab] = useState<'analyze' | 'history'>('analyze');
+const getRiskLevelStyles = (level: MealAnalysis['overallRiskLevel']) => {
+    switch (level) {
+        case 'Low': return {
+            indicator: 'bg-green-500', text: 'text-green-800 dark:text-green-300',
+            bg: 'bg-green-100 dark:bg-green-900/50', border: 'border-green-300 dark:border-green-700',
+        };
+        case 'Moderate': return {
+            indicator: 'bg-yellow-500', text: 'text-yellow-800 dark:text-yellow-300',
+            bg: 'bg-yellow-100 dark:bg-yellow-900/50', border: 'border-yellow-300 dark:border-yellow-700',
+        };
+        case 'High': return {
+            indicator: 'bg-red-500', text: 'text-red-800 dark:text-red-300',
+            bg: 'bg-red-100 dark:bg-red-900/50', border: 'border-red-300 dark:border-red-700',
+        };
+        default: return {
+            indicator: 'bg-slate-500', text: 'text-slate-800 dark:text-slate-300',
+            bg: 'bg-slate-100 dark:bg-slate-700', border: 'border-slate-300 dark:border-slate-600',
+        };
+    }
+};
+
+const getPurineLevelColorForItem = (level: AnalyzedFoodItem['purineLevel']) => {
+    switch (level) {
+        case 'Low': return 'text-green-600 dark:text-green-400';
+        case 'Moderate': return 'text-yellow-600 dark:text-yellow-400';
+        case 'High': return 'text-orange-600 dark:text-orange-400';
+        case 'Very High': return 'text-red-600 dark:text-red-400';
+        default: return 'text-slate-500';
+    }
+};
+
+const MealResult: React.FC<{
+    meal: MealAnalysis;
+    onAddToLog: (timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack') => void;
+    onToggleFavorite: () => void;
+    isFavorite: boolean;
+    onAnalyzeAnother: () => void;
+}> = ({ meal, onAddToLog, onToggleFavorite, isFavorite, onAnalyzeAnother }) => {
+    const { t } = useI18n();
+    const styles = getRiskLevelStyles(meal.overallRiskLevel);
+    const [showLogOptions, setShowLogOptions] = useState(false);
     
-    const [image, setImage] = useState<{ file: File, preview: string } | null>(null);
-    const [textInput, setTextInput] = useState('');
-    const [isListening, setIsListening] = useState(false);
-    const recognitionRef = useRef<any>(null);
+    const timeOfDayOptions: { id: 'breakfast' | 'lunch' | 'dinner' | 'snack', label: string }[] = [
+        { id: 'breakfast', label: t('timeOfDay.breakfast') },
+        { id: 'lunch', label: t('timeOfDay.lunch') },
+        { id: 'dinner', label: t('timeOfDay.dinner') },
+        { id: 'snack', label: t('timeOfDay.snack') },
+    ];
 
-    const [isLoading, setIsLoading] = useState(false);
-    const [selectedAnalysis, setSelectedAnalysis] = useState<MealAnalysis | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    return (
+        <div className="p-4 sm:p-6 space-y-4 max-w-3xl mx-auto">
+            <Card className={`!p-4 sm:!p-6 ${styles.bg}`}>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className={`px-3 py-1 text-sm font-bold rounded-full inline-block ${styles.bg} ${styles.text} border ${styles.border}`}>{meal.overallRiskLevel}</p>
+                        <h2 className="text-2xl sm:text-3xl font-bold mt-2 text-slate-800 dark:text-white">{meal.mealName}</h2>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{meal.mealDescription}</p>
+                    </div>
+                     <button onClick={onToggleFavorite} className={`p-2 rounded-full transition-colors ${isFavorite ? 'text-yellow-500' : 'text-slate-400 hover:text-yellow-500'}`}>
+                        <StarIcon filled={isFavorite} className="w-6 h-6"/>
+                    </button>
+                </div>
 
-    const [mealIdeas, setMealIdeas] = useState<string[]>([]);
-    const [isLoadingIdeas, setIsLoadingIdeas] = useState(false);
-
-    const [isMealTimeModalOpen, setIsMealTimeModalOpen] = useState(false);
-    const [isAdded, setIsAdded] = useState(false);
-
-    // Mobile specific state to show result within history tab
-    const [showHistoryDetail, setShowHistoryDetail] = useState(false);
-
-    // Comparison feature state
-    const [viewMode, setViewMode] = useState<'default' | 'comparison'>('default');
-    const [isCompareMode, setIsCompareMode] = useState(false);
-    const [comparisonList, setComparisonList] = useState<MealAnalysis[]>([]);
-
-
-    useEffect(() => {
-        const currentList = listFilter === 'all' ? history : favoriteMeals;
-        if (!selectedAnalysis && currentList.length > 0 && !isCompareMode && window.innerWidth >= 1024) { // only autoselect on desktop
-            setSelectedAnalysis(currentList[0]);
-        }
-        if (selectedAnalysis && !currentList.some(item => item.id === selectedAnalysis.id)) {
-            setSelectedAnalysis(currentList.length > 0 ? currentList[0] : null);
-        }
-    }, [listFilter, history, favoriteMeals, isCompareMode, selectedAnalysis]);
-
-    useEffect(() => {
-        if (selectedAnalysis) {
-          setShowHistoryDetail(true);
-        }
-    }, [selectedAnalysis]);
-
-    useEffect(() => {
-        if (mobileTab === 'analyze') {
-            setSelectedAnalysis(null);
-            setShowHistoryDetail(false);
-        }
-    }, [mobileTab]);
-    
-    useEffect(() => {
-      setIsAdded(false);
-    }, [selectedAnalysis]);
-
-     // Speech Recognition Effect
-    useEffect(() => {
-        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            recognitionRef.current = new SpeechRecognition();
-            const recognition = recognitionRef.current;
-            recognition.continuous = false;
-            recognition.lang = 'ko-KR';
-            recognition.interimResults = false;
-            recognition.maxAlternatives = 1;
-
-            recognition.onresult = (event: any) => {
-                const transcript = event.results[0][0].transcript;
-                setTextInput(transcript);
-                setIsListening(false);
-            };
-
-            recognition.onerror = (event: any) => {
-                console.error("Speech recognition error", event.error);
-                setIsListening(false);
-            };
+                <div className="mt-4 text-center">
+                    <p className="text-sm text-slate-600 dark:text-slate-300">{t('food.overallPurineScore')}</p>
+                    <p className={`text-5xl font-bold ${styles.text}`}>{meal.totalPurineScore} <span className="text-lg">/ 100</span></p>
+                </div>
+                <p className="mt-4 text-center text-sm text-slate-700 dark:text-slate-300 bg-white/50 dark:bg-black/20 p-3 rounded-lg">{meal.overallSummary}</p>
+                 {meal.dailyImpactAnalysis && (
+                    <div className="mt-4 p-3 rounded-lg bg-sky-100/50 dark:bg-sky-900/40 border border-sky-200 dark:border-sky-800">
+                        <h4 className="font-semibold text-sky-800 dark:text-sky-300 flex items-center">
+                            <DocumentTextIcon className="w-5 h-5 mr-2" />
+                            {t('food.dailyIntakeAnalysis')}
+                        </h4>
+                        <p className="text-sm text-sky-700 dark:text-sky-400 mt-1">{meal.dailyImpactAnalysis}</p>
+                    </div>
+                )}
+            </Card>
             
-            recognition.onend = () => {
-                setIsListening(false);
-            };
-        }
-    }, []);
+            <div className="grid grid-cols-2 gap-4">
+                 <Button onClick={onAnalyzeAnother} variant="secondary">
+                    <BeakerIcon className="w-5 h-5 mr-2" />
+                    {t('food.analyzeAnother')}
+                </Button>
+                <div className="relative">
+                    <Button onClick={() => setShowLogOptions(!showLogOptions)} className="w-full">
+                        <PlusIcon className="w-5 h-5 mr-2" />
+                        {t('food.addToLog')}
+                    </Button>
+                    {showLogOptions && (
+                        <div className="absolute bottom-full mb-2 w-full grid grid-cols-2 sm:grid-cols-4 gap-2 animate-fade-in">
+                            {timeOfDayOptions.map(time => (
+                                <Button key={time.id} variant="secondary" onClick={() => { onAddToLog(time.id); setShowLogOptions(false); }} className="capitalize">
+                                    {time.label}
+                                </Button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
 
-    const toggleListening = () => {
-        if (!recognitionRef.current) return;
-        if (isListening) {
-            recognitionRef.current.stop();
-        } else {
-            recognitionRef.current.start();
-        }
-        setIsListening(!isListening);
-    };
+            <Card>
+                <h3 className="text-lg font-bold mb-3">{t('food.ingredientAnalysis')}</h3>
+                <ul className="space-y-3">
+                    {meal.items.map((item, index) => (
+                        <li key={index} className="p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold">{item.foodName}</span>
+                                <span className={`font-bold text-sm ${getPurineLevelColorForItem(item.purineLevel)}`}>{item.purineLevel} ({item.purineAmount})</span>
+                            </div>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{item.explanation}</p>
+                        </li>
+                    ))}
+                </ul>
+            </Card>
+
+            <Card>
+                <h3 className="text-lg font-bold mb-2">{t('food.aiRecommendations')}</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">{meal.recommendations}</p>
+            </Card>
+
+            <Card>
+                <h3 className="text-lg font-bold mb-2">{t('food.alternativeSuggestions')}</h3>
+                <div className="flex flex-wrap gap-2">
+                    {meal.alternatives.map((alt, index) => (
+                        <span key={index} className="px-3 py-1 bg-teal-100 text-teal-800 dark:bg-teal-900/50 dark:text-teal-300 rounded-full text-sm font-medium">{alt}</span>
+                    ))}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+const Analyzer: React.FC<{
+    onAnalysisComplete: (result: MealAnalysis) => void;
+    preferences: Preferences;
+    logs: LogEntry[];
+    initialText?: string;
+}> = ({ onAnalysisComplete, preferences, logs, initialText }) => {
+    const { t } = useI18n();
+    const [mode, setMode] = useState<'text' | 'image'>('text');
+    const [text, setText] = useState(initialText || '');
+    const [image, setImage] = useState<{ file: File, preview: string } | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const fileInputRef = useRef<HTMLInputElement>(null);
     
-    const handlePromptAdd = () => {
-        setIsMealTimeModalOpen(true);
-    };
+    useEffect(() => {
+        if(initialText) {
+            setText(initialText);
+        }
+    }, [initialText]);
 
-    const handleSelectMealTime = (time: 'breakfast' | 'lunch' | 'dinner' | 'snack') => {
-        if (selectedAnalysis) {
-            onAddToDailyLog(selectedAnalysis, time);
-            setIsMealTimeModalOpen(false);
-            setIsAdded(true);
-            setTimeout(() => setIsAdded(false), 2000);
+    const currentPurineIntake = useMemo(() => {
+        const today = new Date().toDateString();
+        return logs
+            .filter(log => log.type === 'purine_intake' && new Date(log.timestamp).toDateString() === today)
+            .reduce((sum, log) => sum + (log.data as PurineIntakeData).totalPurineScore, 0);
+    }, [logs]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setImage({ file, preview: URL.createObjectURL(file) });
         }
     };
 
-
-    const handleAnalyzeSuccess = useCallback((newResult: MealAnalysis) => {
-        setHistory(prev => {
-            const newHistory = [newResult, ...prev.filter(item => item.id !== newResult.id)];
-            return newHistory.slice(0, 50);
-        });
-        const itemSummary = newResult.items.map(item => `${item.foodName}(${item.purineLevel})`).join(', ');
-        const aiMessage = `AI 식단 분석기로 "${newResult.mealDescription}"을(를) 분석했습니다. [종합 위험도: ${newResult.overallRiskLevel}, 퓨린 점수: ${newResult.totalPurineScore}/100, 개별 항목: ${itemSummary}]. 이 식단에 대해 더 자세한 조언을 해 주세요.`;
-        onActionToAI(aiMessage);
-        
-        // Switch to history tab on mobile to show result
-        if (window.innerWidth < 1024) {
-             setMobileTab('history');
-        }
-
-    }, [setHistory, onActionToAI]);
-    
     const fileToBase64 = (file: File): Promise<string> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -445,329 +195,472 @@ const FoodAnalyzerPanel: React.FC<FoodAnalyzerPanelProps> = ({ history, setHisto
         });
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                setError("이미지 파일은 5MB를 초과할 수 없습니다.");
-                return;
-            }
-            setImage({ file, preview: URL.createObjectURL(file) });
-            setSelectedAnalysis(null);
-            setError(null);
-        }
-    };
-
-    const analyze = async (analysisFn: () => Promise<Omit<MealAnalysis, 'id'> | null>) => {
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if ((mode === 'text' && !text.trim()) || (mode === 'image' && !image)) return;
         setIsLoading(true);
-        setSelectedAnalysis(null);
-        setError(null);
+        setError('');
+
+        const context = { dailyPurineGoal: preferences.dailyPurineGoal, currentPurineIntake };
+        let result: Omit<MealAnalysis, 'id'> | null = null;
         try {
-            const data = await analysisFn();
-            if (data) {
-                const newResult: MealAnalysis = { ...data, id: Date.now().toString() };
-                setSelectedAnalysis(newResult);
-                handleAnalyzeSuccess(newResult);
-                setListFilter('all');
-                return true;
-            } else {
-                setError('정보를 가져올 수 없습니다. 다시 시도해 주세요.');
-                return false;
+             if (mode === 'text') {
+                result = await analyzeMealFromText(text.trim(), context);
+            } else if (image) {
+                const base64 = await fileToBase64(image.file);
+                result = await analyzeMealFromImage(base64, image.file.type, text.trim(), context);
             }
-        } catch (err) {
-            setError('분석 중 오류가 발생했습니다.');
-            console.error(err);
-            return false;
+            if (result) {
+                onAnalysisComplete({ ...result, id: `${Date.now()}` });
+            } else {
+                 setError(t('errors.aiAnalysisFailed'));
+            }
+        } catch (e) {
+            console.error(e);
+            setError(t('errors.analysisError'));
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleAnalyzePhoto = async () => {
-        if (!image) return;
-        const success = await analyze(async () => {
-            const base64Data = await fileToBase64(image.file);
-            return analyzeMealFromImage(base64Data, image.file.type);
-        });
-        if (success) setImage(null);
+    return (
+        <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+            <Card>
+                <div className="p-1 bg-slate-200 dark:bg-slate-700 rounded-lg flex mb-4">
+                    <button onClick={() => setMode('text')} className={`w-1/2 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'text' ? 'bg-white dark:bg-slate-800 shadow' : 'text-slate-600 dark:text-slate-300'}`}>
+                        <PencilIcon className="w-5 h-5 inline-block mr-2" />{t('food.analyzeWithText')}
+                    </button>
+                     <button onClick={() => setMode('image')} className={`w-1/2 py-2 text-sm font-semibold rounded-md transition-colors ${mode === 'image' ? 'bg-white dark:bg-slate-800 shadow' : 'text-slate-600 dark:text-slate-300'}`}>
+                        <CameraIcon className="w-5 h-5 inline-block mr-2" />{t('food.analyzeWithImage')}
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                     {mode === 'image' && (
+                         <div>
+                            <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
+                            <button type="button" onClick={() => fileInputRef.current?.click()} className="w-full h-40 flex flex-col items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-sky-500 transition-colors">
+                                {image ? (
+                                    <div className="relative">
+                                        <img src={image.preview} alt="upload preview" className="w-32 h-32 object-cover rounded-md" />
+                                        <button type="button" onClick={(e) => { e.stopPropagation(); setImage(null); }} className="absolute -top-2 -right-2 bg-slate-600 text-white rounded-full p-1"><XIcon className="w-3 h-3"/></button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <ImageIcon className="w-10 h-10 text-slate-400" />
+                                        <span className="text-sm font-medium text-slate-600 dark:text-slate-300 mt-2">{t('food.choosePhoto')}</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
+                    <textarea value={text} onChange={e => setText(e.target.value)} rows={mode === 'text' ? 4 : 2} placeholder={t(mode === 'text' ? 'food.textPlaceholder' : 'food.imagePlaceholder')} className="w-full p-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg" />
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? <Spinner/> : <><SparklesIcon className="w-5 h-5 mr-2" /> {t('food.requestAnalysis')}</>}
+                    </Button>
+                    {error && <p className="text-sm text-center text-red-500">{error}</p>}
+                </form>
+            </Card>
+        </div>
+    );
+};
+
+const MealComparison: React.FC<{
+    meals: MealAnalysis[];
+}> = ({ meals }) => {
+    const { t } = useI18n();
+    const [result, setResult] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchComparison = async () => {
+            setIsLoading(true);
+            const res = await generateMealComparison(meals);
+            setResult(res);
+            setIsLoading(false);
+        };
+        fetchComparison();
+    }, [meals]);
+
+    return (
+        <div className="p-4 sm:p-6 max-w-3xl mx-auto">
+            <Card>
+                <h2 className="text-xl font-bold mb-4">{t('food.mealComparison')}</h2>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    {meals.map(meal => (
+                        <div key={meal.id} className="p-3 bg-slate-100 dark:bg-slate-700 rounded-lg text-center">
+                            <p className="font-semibold">{meal.mealName}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400">{meal.totalPurineScore} points</p>
+                        </div>
+                    ))}
+                </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg min-h-[10rem] flex items-center justify-center">
+                    {isLoading ? <Spinner/> : <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{result}</p>}
+                </div>
+            </Card>
+        </div>
+    );
+};
+
+const MealLibrary: React.FC<{
+    history: MealAnalysis[];
+    favoriteMeals: MealAnalysis[];
+    onSelectMeal: (meal: MealAnalysis) => void;
+    onToggleFavorite: (meal: MealAnalysis) => void;
+    onDelete: (mealId: string) => void;
+    onNewAnalysis: () => void;
+    onCompare: (meals: MealAnalysis[]) => void;
+    onMealPlan: () => void;
+    onMealSearch: () => void;
+}> = ({ history, favoriteMeals, onSelectMeal, onToggleFavorite, onDelete, onNewAnalysis, onCompare, onMealPlan, onMealSearch }) => {
+    const { t } = useI18n();
+    const [selectedForComparison, setSelectedForComparison] = useState<string[]>([]);
+    
+    const handleToggleComparison = (id: string) => {
+        setSelectedForComparison(prev =>
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
     };
 
-    const handleAnalyzeText = async (e?: React.FormEvent, description?: string) => {
-        if (e) e.preventDefault();
-        const textToAnalyze = description || textInput;
-        if (!textToAnalyze.trim()) return;
-        const success = await analyze(() => analyzeMealFromText(textToAnalyze));
-        if (success) setTextInput('');
-    };
-    
-    const handleFetchMealIdeas = async () => {
-        setIsLoadingIdeas(true);
-        setMealIdeas([]);
-        setError(null);
-        try {
-            const ideas = await generateMealIdeas();
-            if(ideas) {
-                setMealIdeas(ideas);
-            } else {
-                setError('식단 아이디어를 불러오는 데 실패했습니다.');
-            }
-        } catch (error) {
-            setError('식단 아이디어를 불러오는 중 오류가 발생했습니다.');
-            console.error("Failed to fetch meal ideas", error);
-        } finally {
-            setIsLoadingIdeas(false);
+    const handleCompareClick = () => {
+        const mealsToCompare = history.filter(m => selectedForComparison.includes(m.id));
+        if (mealsToCompare.length >= 2) {
+            onCompare(mealsToCompare);
+            setSelectedForComparison([]);
         }
     };
 
-    const handleDeleteHistoryItem = (e: React.MouseEvent, id: string) => {
-        e.stopPropagation();
-        setHistory(prev => prev.filter(item => item.id !== id));
-    };
-    
-    const handleToggleCompareMode = () => {
-        setIsCompareMode(!isCompareMode);
-        setComparisonList([]);
-        setSelectedAnalysis(null);
-        setShowHistoryDetail(false);
-    };
-
-    const handleToggleComparisonItem = (item: MealAnalysis) => {
-        setComparisonList(prev => {
-            const isSelected = prev.some(i => i.id === item.id);
-            if (isSelected) {
-                return prev.filter(i => i.id !== item.id);
-            } else {
-                if(prev.length < 4) return [...prev, item];
-                return prev; // Max 4 items
-            }
-        });
-    };
-    
-    const handleStartComparison = () => {
-        if (comparisonList.length >= 2) {
-            setViewMode('comparison');
-        }
-    };
-
-
-    const displayedList = listFilter === 'all' ? history : favoriteMeals;
-
-    const renderHistoryList = () => (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-800 rounded-xl shadow-sm lg:p-0">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white">분석 기록</h2>
-                <Button onClick={handleToggleCompareMode} variant="secondary" size="sm">
-                    <ClipboardCheckIcon className="w-4 h-4 mr-2"/>
-                    {isCompareMode ? '취소' : '비교'}
-                </Button>
-            </div>
-             <div className="flex-shrink-0">
-                <div className="flex rounded-lg bg-slate-100 dark:bg-slate-700 p-1 m-4 lg:m-0 lg:rounded-none">
-                    <button onClick={() => setListFilter('all')} className={`w-1/2 py-1.5 text-sm font-semibold rounded-md transition-colors ${listFilter === 'all' ? 'bg-white dark:bg-slate-800 shadow-sm text-sky-600' : 'text-slate-600 dark:text-slate-300'}`}>전체</button>
-                    <button onClick={() => setListFilter('favorites')} className={`w-1/2 py-1.5 text-sm font-semibold rounded-md transition-colors ${listFilter === 'favorites' ? 'bg-white dark:bg-slate-800 shadow-sm text-sky-600' : 'text-slate-600 dark:text-slate-300'}`}>즐겨찾기</button>
+    return (
+        <div className="p-4 sm:p-6 h-full flex flex-col max-w-3xl mx-auto">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                <h2 className="text-xl font-bold">{t('food.myMealLibrary')}</h2>
+                <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" onClick={onMealSearch}>
+                        <SearchIcon className="w-4 h-4 mr-1"/> {t('food.search')}
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={onMealPlan}>
+                        <LightbulbIcon className="w-4 h-4 mr-1"/> {t('food.plan')}
+                    </Button>
+                    <Button size="sm" onClick={onNewAnalysis}>
+                        <PlusIcon className="w-4 h-4 mr-1"/> {t('food.analyzeNew')}
+                    </Button>
                 </div>
             </div>
             
-            {displayedList.length === 0 ? (
-                <div className="flex-grow flex items-center justify-center p-4">
-                    <p className="text-center text-sm text-slate-500 dark:text-slate-400">
-                        {listFilter === 'favorites' ? "즐겨찾기에 추가한 식단이 없습니다." : "최근 분석 기록이 없습니다."}
-                    </p>
-                </div>
-            ) : (
-                <ul className={`space-y-2 p-4 pt-0 lg:p-4 overflow-y-auto flex-grow ${isCompareMode ? 'pb-20' : ''}`}>
-                    {displayedList.map(item => {
-                        const isSelected = selectedAnalysis?.id === item.id;
-                        const isFavorite = favoriteMeals.some(fav => fav.id === item.id);
-                        const isSelectedForCompare = comparisonList.some(i => i.id === item.id);
-
-                        return (
-                            <li key={item.id} onClick={() => isCompareMode ? handleToggleComparisonItem(item) : setSelectedAnalysis(item)} className={`group p-3 rounded-lg cursor-pointer transition-all relative ${isSelected && !isCompareMode ? 'bg-sky-100 dark:bg-sky-900/50' : 'bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-700/50'} ${isSelectedForCompare ? 'ring-2 ring-sky-500 shadow-md' : ''}`}>
-                                {isCompareMode && <div className={`absolute top-2 right-2 ${isSelectedForCompare ? 'text-sky-500' : 'text-slate-300 dark:text-slate-600'}`}><CheckCircleIcon filled={isSelectedForCompare} className="w-6 h-6"/></div>}
-                                <div className="flex justify-between items-center">
-                                    <div className="flex-grow pr-2 overflow-hidden">
-                                        <h4 className="font-bold text-slate-800 dark:text-slate-100 truncate">{item.mealDescription}</h4>
-                                        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">퓨린 점수: {item.totalPurineScore}/100</p>
-                                    </div>
-                                    <div className={`flex items-center gap-1 flex-shrink-0 transition-opacity ${isCompareMode ? 'opacity-0' : 'opacity-100 lg:opacity-0 lg:group-hover:opacity-100'}`}>
-                                        <button onClick={(e) => { e.stopPropagation(); onToggleFavorite(item); }} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" aria-label="즐겨찾기 토글">
-                                            <StarIcon className={`w-5 h-5 ${isFavorite ? 'text-yellow-400' : 'text-slate-400'}`} filled={isFavorite} />
-                                        </button>
-                                        {listFilter === 'all' && (
-                                            <button onClick={(e) => handleDeleteHistoryItem(e, item.id)} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" aria-label="기록 삭제">
-                                                <TrashIcon className="w-5 h-5 text-slate-400 hover:text-red-500" />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </li>
-                        )
-                    })}
-                </ul>
-            )}
-            {isCompareMode && (
-                 <div className="absolute bottom-16 lg:bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm p-4 border-t border-slate-200 dark:border-slate-700 z-10">
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold">{comparisonList.length}개 선택됨</span>
-                        <Button onClick={handleStartComparison} disabled={comparisonList.length < 2}>
-                            비교하기
-                        </Button>
+            <div className="flex-grow overflow-y-auto space-y-2 pr-2 -mr-2">
+                {history.length === 0 ? (
+                     <div className="text-center py-16 text-slate-500 dark:text-slate-400">
+                        <BeakerIcon className="w-12 h-12 mx-auto mb-2" />
+                        <p>{t('food.noHistory')}</p>
+                        <p className="text-sm">{t('food.noHistoryDescription')}</p>
                     </div>
+                ) : (
+                    history.map(meal => {
+                        const isFavorite = favoriteMeals.some(fm => fm.id === meal.id);
+                        const isSelectedForCompare = selectedForComparison.includes(meal.id);
+                        return (
+                            <div key={meal.id} className={`p-3 rounded-lg flex items-center transition-colors ${isSelectedForCompare ? 'bg-sky-100 dark:bg-sky-900/50' : 'bg-slate-50 dark:bg-slate-700/50'}`}>
+                                <input type="checkbox" checked={isSelectedForCompare} onChange={() => handleToggleComparison(meal.id)} className="mr-3 form-checkbox h-5 w-5 rounded text-sky-600 bg-slate-200 dark:bg-slate-600 border-slate-300 dark:border-slate-500 focus:ring-sky-500"/>
+                                <div className="flex-grow cursor-pointer" onClick={() => onSelectMeal(meal)}>
+                                    <p className="font-semibold text-slate-800 dark:text-slate-200">{meal.mealName}</p>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">{t('food.purineScore')}: {meal.totalPurineScore}</p>
+                                </div>
+                                <button onClick={() => onToggleFavorite(meal)} className={`p-1 rounded-full ${isFavorite ? 'text-yellow-500' : 'text-slate-400'}`}><StarIcon className="w-5 h-5" filled={isFavorite} /></button>
+                                <button onClick={() => onDelete(meal.id)} className="p-1 rounded-full text-slate-400 hover:text-red-500"><TrashIcon className="w-5 h-5" /></button>
+                            </div>
+                        )
+                    })
+                )}
+            </div>
+             <div className="pt-4 mt-auto border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+                 <Button className="w-full" disabled={selectedForComparison.length < 2} onClick={handleCompareClick}>
+                    <ClipboardCheckIcon className="w-5 h-5 mr-2" />
+                    {t('food.compareSelected', { count: selectedForComparison.length })}
+                </Button>
+            </div>
+        </div>
+    );
+};
+
+const MealPlanner: React.FC = () => {
+    const { t } = useI18n();
+    const [prompt, setPrompt] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [result, setResult] = useState<PlannedMeal[] | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!prompt.trim()) return;
+        setIsLoading(true);
+        setError('');
+        setResult(null);
+        try {
+            const plan = await generateMealPlan(prompt);
+            if (plan) {
+                setResult(plan);
+            } else {
+                setError(t('errors.aiMealPlanError'));
+            }
+        } catch (err) {
+            console.error(err);
+            setError(t('errors.mealPlanGenerationError'));
+        } finally {
+            setIsLoading(false);
+        }
+    };
+    
+    return (
+        <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
+            <Card>
+                <div className="text-center">
+                    <LightbulbIcon className="w-12 h-12 mx-auto text-yellow-400 mb-2" />
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{t('food.mealPlannerTitle')}</h2>
+                    <p className="mt-2 text-slate-600 dark:text-slate-300">{t('food.mealPlannerDescription')}</p>
+                </div>
+                <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                    <textarea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        rows={3}
+                        placeholder={t('food.mealPlannerPlaceholder')}
+                        className="w-full p-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg"
+                        disabled={isLoading}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? <Spinner /> : <><SparklesIcon className="w-5 h-5 mr-2" /> {t('food.getAiMealPlan')}</>}
+                    </Button>
+                    {error && <p className="text-sm text-center text-red-500">{error}</p>}
+                </form>
+            </Card>
+
+            {result && (
+                <div className="space-y-4">
+                    <h3 className="text-xl font-bold text-center">{t('food.aiRecommendedMealPlan')}</h3>
+                    {result.map((meal, index) => (
+                        <Card key={index}>
+                            <h4 className="text-lg font-bold text-sky-700 dark:text-sky-400">{meal.mealName}</h4>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{meal.description}</p>
+                            <div className="mt-3 text-xs font-semibold flex items-center space-x-4">
+                                <span>{t('food.purineScore')}: {meal.estimatedPurineScore}</span>
+                                <span>{t('food.risk')}: {meal.riskLevel}</span>
+                            </div>
+
+                            <div className="mt-4">
+                                <h5 className="font-semibold mb-2">{t('food.ingredients')}</h5>
+                                <div className="flex flex-wrap gap-2">
+                                    {meal.ingredients.map((ing, i) => (
+                                        <span key={i} className="px-2 py-1 bg-slate-200 dark:bg-slate-600 rounded-md text-sm">{ing}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="mt-4">
+                                <h5 className="font-semibold mb-2">{t('food.recipe')}</h5>
+                                <p className="text-sm whitespace-pre-wrap bg-slate-50 dark:bg-slate-900/50 p-3 rounded-lg">{meal.recipe}</p>
+                            </div>
+                        </Card>
+                    ))}
                 </div>
             )}
         </div>
     );
-    
-    const renderAnalysisHub = () => {
-        if (isLoading) {
-            return (
-                <div className="flex flex-col justify-center items-center h-full text-center p-4">
-                    <Spinner />
-                    <p className="text-lg font-semibold text-slate-600 dark:text-slate-300 mt-4">AI가 식단을 분석 중입니다...</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">잠시만 기다려 주세요.</p>
-                </div>
-            );
+};
+
+const MealSearch: React.FC<{
+    onSuggestionSelect: (mealName: string) => void;
+}> = ({ onSuggestionSelect }) => {
+    const { t } = useI18n();
+    const [prompt, setPrompt] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [results, setResults] = useState<MealSuggestion[] | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!prompt.trim()) return;
+        setIsLoading(true);
+        setError('');
+        setResults(null);
+        try {
+            const suggestions = await generateMealSuggestions(prompt);
+            if (suggestions) {
+                setResults(suggestions);
+            } else {
+                setError(t('errors.aiMealSearchError'));
+            }
+        } catch (err) {
+            console.error(err);
+            setError(t('errors.mealSearchError'));
+        } finally {
+            setIsLoading(false);
         }
+    };
+    
+    return (
+         <div className="p-4 sm:p-6 max-w-3xl mx-auto space-y-4">
+            <Card>
+                <div className="text-center">
+                    <SearchIcon className="w-12 h-12 mx-auto text-sky-500 mb-2" />
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">{t('food.mealSearchTitle')}</h2>
+                    <p className="mt-2 text-slate-600 dark:text-slate-300">{t('food.mealSearchDescription')}</p>
+                </div>
+                <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+                    <textarea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        rows={2}
+                        placeholder={t('food.mealSearchPlaceholder')}
+                        className="w-full p-3 bg-slate-50 dark:bg-slate-700/50 border border-slate-300 dark:border-slate-600 rounded-lg"
+                        disabled={isLoading}
+                    />
+                    <Button type="submit" className="w-full" disabled={isLoading}>
+                        {isLoading ? <Spinner /> : <><SparklesIcon className="w-5 h-5 mr-2" /> {t('food.getAiMealSuggestions')}</>}
+                    </Button>
+                    {error && <p className="text-sm text-center text-red-500">{error}</p>}
+                </form>
+            </Card>
 
-        return (
-            <div className="space-y-6 p-4">
-                {error && <p className="text-center text-red-500 bg-red-100 dark:bg-red-900/50 p-3 rounded-lg">{error}</p>}
-                
-                <Card>
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">분석 시작하기</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-4">사진, 텍스트, 음성으로 식단을 분석하세요.</p>
-                    <div className="space-y-4">
-                        <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                        {image ? (
-                            <div className="space-y-3">
-                                <div className="relative">
-                                    <img src={image.preview} alt="음식 사진 미리보기" className="w-full max-h-60 object-contain rounded-lg" />
-                                    <button onClick={() => setImage(null)} className="absolute -top-2 -right-2 bg-slate-600 text-white rounded-full p-1"><XIcon className="w-4 h-4" /></button>
-                                </div>
-                                <Button onClick={handleAnalyzePhoto} className="w-full" size="lg">사진으로 분석하기</Button>
+            {results && (
+                <div className="space-y-3">
+                     <h3 className="text-xl font-bold text-center">{t('food.aiRecommendedMeals')}</h3>
+                    {results.map((meal, index) => (
+                        <Card 
+                            key={index} 
+                            className="!p-4 cursor-pointer hover:shadow-xl hover:border-sky-500 border-2 border-transparent transition-all"
+                            onClick={() => onSuggestionSelect(meal.mealName)}
+                        >
+                            <h4 className="font-bold text-sky-700 dark:text-sky-400">{meal.mealName}</h4>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{meal.description}</p>
+                            <div className="mt-2 text-xs font-semibold">
+                                <span>{t('food.estPurineScore')}: {meal.estimatedPurineScore}</span>
+                                <span className="mx-2">|</span>
+                                <span>{t('food.risk')}: {meal.riskLevel}</span>
                             </div>
-                        ) : (
-                            <Button onClick={() => fileInputRef.current?.click()} variant="secondary" className="w-full py-4 flex items-center justify-center">
-                                <CameraIcon className="w-6 h-6 mr-2"/> 사진으로 분석
-                            </Button>
-                        )}
-                        <form onSubmit={handleAnalyzeText} className="relative">
-                            <div className="flex items-center space-x-2">
-                                <input value={textInput} onChange={(e) => setTextInput(e.target.value)} placeholder={isListening ? "듣고 있어요..." : "음식 이름 입력 또는 음성으로"} className="flex-grow w-full px-4 py-3 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500"/>
-                                {recognitionRef.current && (
-                                    <button type="button" onClick={toggleListening} className={`p-3 rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                                        <MicrophoneIcon className="w-5 h-5"/>
-                                    </button>
-                                )}
-                                <Button type="submit" disabled={!textInput.trim()}>분석</Button>
-                            </div>
-                        </form>
-                    </div>
-                </Card>
+                        </Card>
+                    ))}
+                     <p className="text-xs text-center text-slate-500 dark:text-slate-400 pt-2">
+                        {t('food.clickForAnalysis')}
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+};
 
-                <Card>
-                    <div className="flex justify-between items-center mb-4">
-                        <div>
-                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">AI 식단 추천</h3>
-                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">무엇을 먹을지 고민되시나요?</p>
-                        </div>
-                        <Button onClick={handleFetchMealIdeas} disabled={isLoadingIdeas} size="sm" variant="secondary">
-                            <SparklesIcon className="w-4 h-4 mr-2" />
-                            {isLoadingIdeas ? '로딩중...' : '추천 받기'}
-                        </Button>
-                    </div>
-                     {isLoadingIdeas ? (
-                         <div className="flex justify-center p-4"><Spinner /></div>
-                    ) : mealIdeas.length > 0 ? (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {mealIdeas.map((idea, i) => (
-                                <button key={i} onClick={() => handleAnalyzeText(undefined, idea)} className="w-full text-left p-3 rounded-lg bg-slate-100 dark:bg-slate-700/50 hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors">
-                                    <p className="font-medium text-slate-800 dark:text-slate-200">{idea}</p>
-                                </button>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="text-center py-4">
-                            <p className="text-sm text-slate-500 dark:text-slate-400">버튼을 눌러 통풍에 안전한 식단 아이디어를 얻어보세요.</p>
-                        </div>
-                    )}
-                </Card>
-            </div>
-        );
+
+const FoodAnalyzerPanel: React.FC<FoodAnalyzerPanelProps> = ({ logs, preferences, history, setHistory, favoriteMeals, onToggleFavorite, onAddToDailyLog }) => {
+    const { t } = useI18n();
+    type View = 'library' | 'analyzer' | 'result' | 'comparison' | 'planner' | 'search';
+    const [view, setView] = useState<View>('library');
+    const [selectedMeal, setSelectedMeal] = useState<MealAnalysis | null>(null);
+    const [comparisonMeals, setComparisonMeals] = useState<MealAnalysis[]>([]);
+    const [initialAnalyzerText, setInitialAnalyzerText] = useState('');
+    
+    const handleAnalysisComplete = useCallback((result: MealAnalysis) => {
+        setHistory(prev => [result, ...prev.filter(item => item.id !== result.id)]);
+        setSelectedMeal(result);
+        setView('result');
+    }, [setHistory]);
+
+    const handleSelectMeal = useCallback((meal: MealAnalysis) => {
+        setSelectedMeal(meal);
+        setView('result');
+    }, []);
+
+    const handleDeleteMeal = useCallback((mealId: string) => {
+        setHistory(prev => prev.filter(m => m.id !== mealId));
+        if (selectedMeal?.id === mealId) {
+            setSelectedMeal(null);
+            setView('library');
+        }
+    }, [selectedMeal, setHistory]);
+    
+    const handleCompare = useCallback((meals: MealAnalysis[]) => {
+        if (meals.length >= 2) {
+            setComparisonMeals(meals);
+            setView('comparison');
+        }
+    }, []);
+    
+    const handleSuggestionSelect = (mealName: string) => {
+        setInitialAnalyzerText(mealName);
+        setView('analyzer');
     };
 
-    if (viewMode === 'comparison') {
-        return (
-            <MealComparisonView
-                items={comparisonList}
-                onBack={() => {
-                    setViewMode('default');
-                    setIsCompareMode(false);
-                    setComparisonList([]);
-                }}
-            />
-        );
+    const isFavorite = useMemo(() => {
+        if (!selectedMeal) return false;
+        return favoriteMeals.some(fm => fm.id === selectedMeal.id);
+    }, [selectedMeal, favoriteMeals]);
+
+    const handleBack = () => {
+        setView('library');
+        setSelectedMeal(null);
+        setComparisonMeals([]);
+        setInitialAnalyzerText('');
+    }
+    
+    const handleAnalyzeAnother = () => {
+        setSelectedMeal(null);
+        setInitialAnalyzerText('');
+        setView('analyzer');
+    };
+
+    const renderContent = () => {
+        switch (view) {
+            case 'analyzer':
+                return <Analyzer 
+                    onAnalysisComplete={handleAnalysisComplete} 
+                    preferences={preferences} 
+                    logs={logs}
+                    initialText={initialAnalyzerText}
+                />;
+            case 'planner':
+                return <MealPlanner />;
+            case 'search':
+                return <MealSearch onSuggestionSelect={handleSuggestionSelect} />;
+            case 'result':
+                if (selectedMeal) {
+                    return <MealResult
+                        meal={selectedMeal}
+                        onAddToLog={(timeOfDay) => onAddToDailyLog(selectedMeal, timeOfDay)}
+                        onToggleFavorite={() => onToggleFavorite(selectedMeal)}
+                        isFavorite={isFavorite}
+                        onAnalyzeAnother={handleAnalyzeAnother}
+                    />;
+                }
+                setView('library'); // Fallback to library if no meal is selected
+                return null;
+            case 'comparison':
+                return <MealComparison meals={comparisonMeals} />;
+            case 'library':
+            default:
+                return <MealLibrary
+                    history={history}
+                    favoriteMeals={favoriteMeals}
+                    onSelectMeal={handleSelectMeal}
+                    onToggleFavorite={onToggleFavorite}
+                    onDelete={handleDeleteMeal}
+                    onNewAnalysis={() => setView('analyzer')}
+                    onCompare={handleCompare}
+                    onMealPlan={() => setView('planner')}
+                    onMealSearch={() => setView('search')}
+                />;
+        }
     }
 
     return (
-        <div className="flex flex-col lg:grid lg:grid-cols-3 xl:grid-cols-5 lg:gap-6 h-full">
-            {/* Mobile Tab Navigation */}
-            <div className="lg:hidden flex border-b border-slate-200 dark:border-slate-700 flex-shrink-0 bg-white/50 dark:bg-slate-800/50 backdrop-blur-sm sticky top-0 z-10">
-                <MobileTabButton active={mobileTab === 'analyze'} onClick={() => setMobileTab('analyze')}>
-                    <BeakerIcon className="w-5 h-5"/><span>분석</span>
-                </MobileTabButton>
-                <MobileTabButton active={mobileTab === 'history'} onClick={() => setMobileTab('history')}>
-                    <CalendarIcon className="w-5 h-5"/><span>기록</span>
-                </MobileTabButton>
+        <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950">
+            {view !== 'library' && (
+                <div className="p-2 flex-shrink-0">
+                    <Button variant="secondary" size="sm" onClick={handleBack}>
+                        <ChevronLeftIcon className="w-5 h-5 mr-1"/>
+                        {t('food.backToLibrary')}
+                    </Button>
+                </div>
+            )}
+            <div className="flex-grow overflow-y-auto">
+                {renderContent()}
             </div>
-
-            {/* Desktop View: Left Panel */}
-            <div className="hidden lg:flex flex-col h-full lg:col-span-1 xl:col-span-2">
-                {renderHistoryList()}
-            </div>
-            
-            {/* Desktop View: Right Panel */}
-            <div className="hidden lg:flex flex-col space-y-6 overflow-y-auto p-4 lg:col-span-2 xl:col-span-3">
-                 {selectedAnalysis ? (
-                    <MealResult 
-                        result={selectedAnalysis} 
-                        isFavorite={favoriteMeals.some(fav => fav.id === selectedAnalysis.id)}
-                        isAdded={isAdded}
-                        onToggleFavorite={() => onToggleFavorite(selectedAnalysis)}
-                        onPromptAdd={handlePromptAdd}
-                        onBackToList={() => setSelectedAnalysis(null)}
-                    />
-                ) : (
-                   renderAnalysisHub()
-                )}
-            </div>
-
-            {/* Mobile View */}
-            <div className="lg:hidden flex-grow overflow-y-auto">
-                {mobileTab === 'analyze' && renderAnalysisHub()}
-                {mobileTab === 'history' && (
-                    showHistoryDetail && selectedAnalysis ? (
-                        <div className="p-4">
-                            <MealResult 
-                                result={selectedAnalysis} 
-                                isFavorite={favoriteMeals.some(fav => fav.id === selectedAnalysis.id)}
-                                isAdded={isAdded}
-                                onToggleFavorite={() => onToggleFavorite(selectedAnalysis)}
-                                onPromptAdd={handlePromptAdd}
-                                onBackToList={() => setShowHistoryDetail(false)}
-                            />
-                        </div>
-                    ) : (
-                        renderHistoryList()
-                    )
-                )}
-            </div>
-            
-            <MealTimeSelectionModal
-                isOpen={isMealTimeModalOpen}
-                onClose={() => setIsMealTimeModalOpen(false)}
-                onSelect={handleSelectMealTime}
-            />
         </div>
     );
 };

@@ -1,10 +1,12 @@
+
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { sendMessageToAi } from '../services/geminiService';
 import type { ChatMessage, Part } from '../types';
 import Button from './common/Button';
 import Spinner from './common/Spinner';
 import Card from './common/Card';
-import { SendIcon, PaperclipIcon, SearchIcon, XIcon, SparklesIcon, MicrophoneIcon } from './Icons';
+import { SendIcon, PaperclipIcon, SearchIcon, XIcon, SparklesIcon, MicrophoneIcon, LightbulbIcon } from './Icons';
+import { useI18n } from '../hooks/useI18n';
 
 // Simple markdown to HTML renderer
 const renderMarkdown = (text: string) => {
@@ -22,6 +24,7 @@ const renderMarkdown = (text: string) => {
 };
 
 const Message: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
+    const { t } = useI18n();
     return (
         <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-xs md:max-w-md lg:max-w-lg px-4 py-2 rounded-2xl ${
@@ -37,7 +40,7 @@ const Message: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
                 ))}
                  {msg.role === 'model' && msg.groundingChunks && msg.groundingChunks.length > 0 && (
                     <div className="mt-4 pt-3 border-t border-slate-300 dark:border-slate-600">
-                        <h4 className="text-xs font-semibold mb-2">출처:</h4>
+                        <h4 className="text-xs font-semibold mb-2">{t('chat.sources')}:</h4>
                         <ul className="space-y-1">
                             {msg.groundingChunks.map((chunk, i) => chunk.web && (
                                 <li key={i}>
@@ -55,17 +58,18 @@ const Message: React.FC<{ msg: ChatMessage }> = ({ msg }) => {
 };
 
 const SuggestionChips: React.FC<{ onSuggestionClick: (prompt: string) => void }> = ({ onSuggestionClick }) => {
+    const { t } = useI18n();
     const suggestionPrompts = [
-        "통풍에 좋은 식단 추천해줘",
-        "요산 수치를 낮추는 방법 알려줘",
-        "맥주가 왜 안좋은지 설명해줘",
+        t('chat.suggestion1'),
+        t('chat.suggestion2'),
+        t('chat.suggestion3'),
     ];
 
     return (
         <div className="p-4 flex flex-col items-center justify-center h-full">
             <SparklesIcon className="w-12 h-12 text-yellow-400 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">AI 비서</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">무엇이든 물어보세요!</p>
+            <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200 mb-2">{t('chat.title')}</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 text-center">{t('chat.subtitle')}</p>
             <div className="flex flex-wrap justify-center gap-2">
                 {suggestionPrompts.map(prompt => (
                     <button 
@@ -92,6 +96,7 @@ export interface ChatPanelRef {
 }
 
 const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistory }, ref) => {
+    const { t, locale } = useI18n();
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [image, setImage] = useState<{ file: File, preview: string } | null>(null);
@@ -116,7 +121,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
             recognitionRef.current = new SpeechRecognition();
             const recognition = recognitionRef.current;
             recognition.continuous = false;
-            recognition.lang = 'ko-KR';
+            recognition.lang = locale;
             recognition.interimResults = false;
             recognition.maxAlternatives = 1;
 
@@ -135,7 +140,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
                 setIsListening(false);
             };
         }
-    }, []);
+    }, [locale]);
 
     const toggleListening = () => {
         if (!recognitionRef.current) return;
@@ -151,7 +156,8 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
         setIsLoading(true);
         setHistory(prev => [...prev, userMessage]);
 
-        const { text, groundingChunks } = await sendMessageToAi(history, userMessage.parts, useWebSearch);
+        const disclaimer = t('disclaimer.medical');
+        const { text, groundingChunks } = await sendMessageToAi(history, userMessage.parts, disclaimer, useWebSearch);
         
         const modelMessage: ChatMessage = { 
             role: 'model',
@@ -161,7 +167,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
         };
         setHistory(prev => [...prev, modelMessage]);
         setIsLoading(false);
-    }, [history, setHistory, useWebSearch]);
+    }, [history, setHistory, useWebSearch, t]);
     
     // Expose addMessage to parent component
     useImperativeHandle(ref, () => ({
@@ -202,6 +208,16 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
         setInput('');
         setImage(null);
     };
+    
+    const handleSuggestMealIdea = () => {
+        const prompt = t('chat.getMealIdeaPrompt');
+        const userMessage: ChatMessage = {
+            role: 'user',
+            parts: [{ text: prompt }],
+            timestamp: new Date().toISOString()
+        };
+        handleSendMessage(userMessage);
+    };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -212,11 +228,18 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
     
     const handleSuggestionClick = (prompt: string) => {
         setInput(prompt);
+        const userMessage: ChatMessage = {
+            role: 'user',
+            parts: [{ text: prompt }],
+            timestamp: new Date().toISOString()
+        };
+        handleSendMessage(userMessage);
+        setInput('');
     };
 
     return (
         <Card className="flex-grow flex flex-col h-full !p-0">
-             <h2 className="text-xl font-bold text-slate-900 dark:text-white p-4 border-b border-slate-200 dark:border-slate-700 text-center">AI 비서</h2>
+             <h2 className="text-xl font-bold text-slate-900 dark:text-white p-4 border-b border-slate-200 dark:border-slate-700 text-center">{t('chat.title')}</h2>
             <div className="flex-grow overflow-y-auto p-4 space-y-4">
                 {history.length === 0 && !isLoading && <SuggestionChips onSuggestionClick={handleSuggestionClick} />}
                 {history.map((msg, index) => <Message key={index} msg={msg} />)}
@@ -230,6 +253,18 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
                 <div ref={messagesEndRef} />
             </div>
             <div className="p-4 border-t border-slate-200 dark:border-slate-700">
+                <div className="mb-3">
+                    <Button
+                        onClick={handleSuggestMealIdea}
+                        variant="secondary"
+                        size="sm"
+                        className="w-full"
+                        disabled={isLoading}
+                    >
+                        <LightbulbIcon className="w-5 h-5 mr-2" />
+                        {t('chat.getMealIdea')}
+                    </Button>
+                </div>
                 {image && (
                      <div className="relative w-24 h-24 mb-2">
                         <img src={image.preview} alt="preview" className="w-full h-full object-cover rounded-lg" />
@@ -240,7 +275,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
                 )}
                 <form onSubmit={handleFormSubmit} className="flex items-center space-x-2">
                      <input type="file" accept="image/*" ref={fileInputRef} onChange={handleFileChange} className="hidden" />
-                     <Button type="button" onClick={() => fileInputRef.current?.click()} variant="secondary" className="rounded-full !p-3" aria-label="Attach image">
+                     <Button type="button" onClick={() => fileInputRef.current?.click()} variant="secondary" className="rounded-full !p-3" aria-label={t('chat.attachImage')}>
                          <PaperclipIcon />
                      </Button>
                     <div className="relative flex-grow">
@@ -248,7 +283,7 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
                             type="text"
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder={isListening ? "듣고 있어요..." : "메시지 입력..."}
+                            placeholder={isListening ? t('chat.listening') : t('chat.placeholder')}
                             className="w-full px-4 py-2 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-full focus:outline-none focus:ring-2 focus:ring-sky-500 pr-12"
                             disabled={isLoading}
                         />
@@ -258,13 +293,13 @@ const ChatPanel = forwardRef<ChatPanelRef, ChatPanelProps>(({ history, setHistor
                             </button>
                         )}
                     </div>
-                    <Button type="submit" disabled={isLoading || (!input.trim() && !image)} className="rounded-full !p-3" aria-label="Send message">
+                    <Button type="submit" disabled={isLoading || (!input.trim() && !image)} className="rounded-full !p-3" aria-label={t('chat.sendMessage')}>
                         <SendIcon />
                     </Button>
                 </form>
                 <div className="flex items-center justify-end mt-2">
                     <label htmlFor="web-search-toggle" className="flex items-center cursor-pointer">
-                        <span className="mr-2 text-sm text-slate-600 dark:text-slate-400">웹 검색</span>
+                        <span className="mr-2 text-sm text-slate-600 dark:text-slate-400">{t('chat.webSearch')}</span>
                         <div className="relative">
                             <input type="checkbox" id="web-search-toggle" className="sr-only" checked={useWebSearch} onChange={() => setUseWebSearch(!useWebSearch)} />
                             <div className="block bg-slate-300 dark:bg-slate-600 w-10 h-6 rounded-full"></div>

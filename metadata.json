@@ -1,7 +1,8 @@
 {
-  "name": "GoutCare AI v2 ",
-  "description": "An AI-powered application to help users track and manage gout through diet logging, symptom monitoring, and personalized advice from Gemini.",
   "requestFramePermissions": [
-    "camera"
-  ]
+    "camera",
+    "microphone"
+  ],
+  "name": "GoutCare AI v3",
+  "description": ""
 }

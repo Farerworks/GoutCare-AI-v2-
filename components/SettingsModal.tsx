@@ -3,6 +3,7 @@ import type { Preferences } from '../types';
 import Button from './common/Button';
 import { CloseIcon } from './Icons';
 import { mlToOz, ozToMl } from '../utils/units';
+import { useI18n } from '../hooks/useI18n';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -12,6 +13,7 @@ interface SettingsModalProps {
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferences, setPreferences }) => {
+  const { t } = useI18n();
   if (!isOpen) return null;
 
   const handleWeightUnitChange = (unit: 'kg' | 'lbs') => {
@@ -49,15 +51,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
         </button>
         <div className="p-6">
           <h2 className="text-xl font-bold text-center mb-6 text-slate-800 dark:text-slate-100">
-            설정
+            {t('settings.title')}
           </h2>
           
           <div className="space-y-6">
             {/* Daily Goals */}
             <div className="space-y-4">
-              <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">나의 목표</h3>
+              <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">{t('settings.myGoals')}</h3>
               <div>
-                <label htmlFor="fluidGoal" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">일일 수분 섭취 목표 ({preferences.fluidUnit})</label>
+                <label htmlFor="fluidGoal" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.dailyFluidGoal', { unit: preferences.fluidUnit })}</label>
                 <input
                   id="fluidGoal"
                   type="number"
@@ -67,7 +69,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
                 />
               </div>
               <div>
-                <label htmlFor="purineGoal" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">일일 퓨린 점수 목표</label>
+                <label htmlFor="purineGoal" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.dailyPurineGoal')}</label>
                 <input
                   id="purineGoal"
                   type="number"
@@ -80,34 +82,34 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, preferen
 
             {/* Units */}
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">단위 설정</h3>
+              <h3 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b pb-2">{t('settings.unitSettings')}</h3>
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">체중 단위</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.weightUnit')}</label>
                 <div className="flex rounded-lg shadow-sm">
                   <button onClick={() => handleWeightUnitChange('kg')} className={`flex-1 px-4 py-2 text-sm font-semibold rounded-l-lg transition-colors ${preferences.weightUnit === 'kg' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
-                    Kilograms (kg)
+                    {t('settings.kg')}
                   </button>
                   <button onClick={() => handleWeightUnitChange('lbs')} className={`flex-1 px-4 py-2 text-sm font-semibold rounded-r-lg transition-colors ${preferences.weightUnit === 'lbs' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
-                    Pounds (lbs)
+                    {t('settings.lbs')}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">수분 단위</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{t('settings.fluidUnit')}</label>
                 <div className="flex rounded-lg shadow-sm">
                   <button onClick={() => handleFluidUnitChange('ml')} className={`flex-1 px-4 py-2 text-sm font-semibold rounded-l-lg transition-colors ${preferences.fluidUnit === 'ml' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
-                    Milliliters (ml)
+                    {t('settings.ml')}
                   </button>
                   <button onClick={() => handleFluidUnitChange('oz')} className={`flex-1 px-4 py-2 text-sm font-semibold rounded-r-lg transition-colors ${preferences.fluidUnit === 'oz' ? 'bg-sky-600 text-white' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
-                    Ounces (oz)
+                    {t('settings.oz')}
                   </button>
                 </div>
               </div>
             </div>
             
             <div className="pt-4 flex justify-end">
-                <Button onClick={onClose}>닫기</Button>
+                <Button onClick={onClose}>{t('settings.close')}</Button>
             </div>
           </div>
         </div>

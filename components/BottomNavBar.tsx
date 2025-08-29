@@ -1,20 +1,23 @@
 import React from 'react';
 import type { ActiveView } from '../types';
-import { HomeIcon, CalendarIcon, ChatBubbleIcon, BeakerIcon } from './Icons';
+import { HomeIcon, CalendarIcon, ChatBubbleIcon, BeakerIcon, ChartBarIcon } from './Icons';
+import { useI18n } from '../hooks/useI18n';
 
 interface BottomNavBarProps {
   activeView: ActiveView;
   setActiveView: (view: ActiveView) => void;
 }
 
-const navItems = [
-  { id: 'dashboard', label: '홈', icon: <HomeIcon className="w-6 h-6 mb-1" /> },
-  { id: 'calendar', label: '기록', icon: <CalendarIcon className="w-6 h-6 mb-1" /> },
-  { id: 'food', label: '음식 분석', icon: <BeakerIcon className="w-6 h-6 mb-1" /> },
-  { id: 'chat', label: 'AI 비서', icon: <ChatBubbleIcon className="w-6 h-6 mb-1" /> },
-];
-
 const BottomNavBar: React.FC<BottomNavBarProps> = ({ activeView, setActiveView }) => {
+  const { t } = useI18n();
+  const navItems = [
+    { id: 'dashboard', label: t('nav.home'), icon: <HomeIcon className="w-6 h-6 mb-1" /> },
+    { id: 'calendar', label: t('nav.logs'), icon: <CalendarIcon className="w-6 h-6 mb-1" /> },
+    { id: 'food', label: t('nav.foodLab'), icon: <BeakerIcon className="w-6 h-6 mb-1" /> },
+    { id: 'report', label: t('nav.report'), icon: <ChartBarIcon className="w-6 h-6 mb-1" /> },
+    { id: 'chat', label: t('nav.assistant'), icon: <ChatBubbleIcon className="w-6 h-6 mb-1" /> },
+  ];
+
   return (
     <footer className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-t-md z-20">
       <div className="flex justify-around items-center h-16">

@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { GoutIcon, DownloadIcon, UploadIcon, ResetIcon, SettingsIcon, ShareIcon, CheckIcon } from './Icons';
+import { useI18n } from '../hooks/useI18n';
 
 interface HeaderProps {
     onReset: () => void;
@@ -9,6 +10,7 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSettings }) => {
+  const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -19,7 +21,7 @@ const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSett
   const handleShare = async () => {
     const shareData = {
       title: 'GoutCare AI',
-      text: 'Check out this Gout management app!',
+      text: t('header.shareText'),
       url: window.location.href,
     };
 
@@ -37,7 +39,7 @@ const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSett
         setTimeout(() => setIsCopied(false), 2000);
       } catch (clipboardErr) {
         console.error('Failed to copy to clipboard', clipboardErr);
-        alert('Could not copy link to clipboard.');
+        alert(t('errors.clipboardCopyFailed'));
       }
     }
   };
@@ -49,25 +51,26 @@ const Header: React.FC<HeaderProps> = ({ onReset, onExport, onImport, onOpenSett
         <div className="flex items-center justify-between md:justify-end h-16">
           <div className="flex items-center space-x-3 md:hidden">
             <GoutIcon />
-            <h1 className="text-xl font-bold text-slate-800 dark:text-white">
-              GoutCare AI <span className="text-sm font-medium text-slate-500 dark:text-slate-400">(통풍관리)</span>
+            <h1 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <span>GoutCare AI</span>
+              <span className="text-sm font-semibold bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300 px-2 py-0.5 rounded-full">v3</span>
             </h1>
           </div>
           <div className="flex items-center space-x-1">
               <input type="file" accept=".json" ref={fileInputRef} onChange={onImport} className="hidden" />
-               <button onClick={handleShare} aria-label="Share App" className={`p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 ${isCopied ? '!text-green-500' : ''}`}>
+               <button onClick={handleShare} aria-label={t('header.buttons.share')} className={`p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 ${isCopied ? '!text-green-500' : ''}`}>
                   {isCopied ? <CheckIcon className="w-5 h-5"/> : <ShareIcon className="w-5 h-5"/>}
               </button>
-              <button onClick={onOpenSettings} aria-label="Settings" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
+              <button onClick={onOpenSettings} aria-label={t('header.buttons.settings')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
                   <SettingsIcon className="w-5 h-5"/>
               </button>
-              <button onClick={handleImportClick} aria-label="Import Data" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
+              <button onClick={handleImportClick} aria-label={t('header.buttons.import')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
                   <UploadIcon className="w-5 h-5"/>
               </button>
-              <button onClick={onExport} aria-label="Export Data" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
+              <button onClick={onExport} aria-label={t('header.buttons.export')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400">
                   <DownloadIcon className="w-5 h-5"/>
               </button>
-              <button onClick={onReset} aria-label="Reset Data" className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500">
+              <button onClick={onReset} aria-label={t('header.buttons.reset')} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-red-500">
                   <ResetIcon className="w-5 h-5"/>
               </button>
           </div>

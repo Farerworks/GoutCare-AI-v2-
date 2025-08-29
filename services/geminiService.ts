@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import type { ChatMessage, Part, LogEntry, MealAnalysis } from '../types';
+import type { ChatMessage, Part, LogEntry, MealAnalysis, HealthReport, PlannedMeal, SymptomData, PurineIntakeData, WellnessData, HydrationData, AlcoholData, MealSuggestion } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
@@ -10,26 +11,25 @@ if (!API_KEY) {
 const ai = new GoogleGenAI({ apiKey: API_KEY });
 const model = 'gemini-2.5-flash';
 
-const medicalDisclaimer = "중요: 저는 AI 비서이며 의료 전문가가 아닙니다. 제공되는 모든 정보는 정보 제공 및 교육 목적으로만 제공되며 전문적인 의학적 조언, 진단 또는 치료를 대체할 수 없습니다. 건강에 대한 우려가 있는 경우 항상 의사나 다른 자격을 갖춘 의료 제공자와 상담하십시오.";
+// A unified function for all chat communications
+export const sendMessageToAi = async (
+    history: ChatMessage[],
+    newParts: Part[],
+    disclaimerText: string,
+    useWebSearch: boolean = false
+): Promise<{ text: string, groundingChunks?: any[] }> => {
 
-const systemInstruction = `You are GoutCare AI, an expert, empathetic, and safe AI assistant for gout management, communicating in Korean. Your knowledge is based on internationally recognized medical guidelines for gout.
+    const systemInstruction = `You are GoutCare AI, an expert, empathetic, and safe AI assistant for gout management, communicating in English. Your knowledge is based on internationally recognized medical guidelines for gout.
 
 Your primary functions are:
 1.  **Provide Reliable Information:** Answer questions about diet (including specific purine content of foods), lifestyle, and general gout topics based on your internal knowledge. Your goal is to reduce confusion from misinformation.
-2.  **Analyze Health Logs:** Interpret user-submitted health logs (symptoms, medication, diet, and wellness metrics like water intake, weight, sleep, and stress). You can analyze images of meals or pills to provide relevant feedback, like assessing purine content from a photo.
+2.  **Analyze Health Logs:** Interpret user-submitted health logs (symptoms, medication, diet, hydration, alcohol, and wellness metrics like weight, sleep, and stress). You can analyze images of meals or pills to provide relevant feedback, like assessing purine content from a photo.
 3.  **Use Web Search:** If a user's question is about recent events, news, or topics outside your core knowledge, you must use the Google Search tool to find the most current and reliable information. Always cite your sources when using search.
 4.  **Maintain Context:** Remember past conversations and logged data to provide a personalized, natural, and supportive dialogue.
 
 **Crucial Safety Rule:** You MUST NOT provide medical diagnoses, prescriptions, or personalized treatment advice. If a user asks for a diagnosis (e.g., "Do I have gout?"), asks if they should take a specific medication, or describes severe/atypical symptoms, you must decline and strongly advise them to consult a qualified healthcare professional immediately.
 
-End every response with the disclaimer: "${medicalDisclaimer}"`;
-
-// A unified function for all chat communications
-export const sendMessageToAi = async (
-    history: ChatMessage[],
-    newParts: Part[],
-    useWebSearch: boolean = false
-): Promise<{ text: string, groundingChunks?: any[] }> => {
+End every response with the disclaimer: "${disclaimerText}"`;
     
     // Convert our app's ChatMessage format to the format required by the GenAI SDK
     const apiHistory = history.map(msg => ({
@@ -71,7 +71,7 @@ export const sendMessageToAi = async (
         };
     } catch (error) {
         console.error("Error getting AI chat response:", error);
-        return { text: `AI 응답을 가져오는 중 오류가 발생했습니다. 나중에 다시 시도해 주세요. \n\n${medicalDisclaimer}` };
+        return { text: `An error occurred while fetching the AI response. Please try again later. \n\n${disclaimerText}` };
     }
 };
 
@@ -83,28 +83,33 @@ export const generateGoutForecast = async (logs: LogEntry[], chatHistory: ChatMe
     const healthProfileSummary = `
         Recent Logs: ${JSON.stringify(recentLogs.map(l => {
             const logData: any = { type: l.type, date: l.timestamp };
-            if (l.type === 'wellness') logData.data = l.data;
-            if (l.type === 'symptom') logData.pain = l.data.painLevel;
-            if (l.type === 'diet') logData.meal = l.data.description.substring(0, 30);
-            if (l.type === 'life_event') logData.event = l.data.event;
+            if (l.type === 'wellness') logData.data = l.data as WellnessData;
+            if (l.type === 'hydration') logData.data = l.data as HydrationData;
+            if (l.type === 'alcohol') logData.data = l.data as AlcoholData;
+            if (l.type === 'symptom') {
+                const symptomData = l.data as SymptomData;
+                logData.pain = symptomData.painLevel;
+                logData.details = symptomData.symptoms;
+            }
+            if (l.type === 'purine_intake') logData.meal = (l.data as PurineIntakeData).mealName.substring(0, 30);
             return logData;
         }))}
         Recent Conversation Summary: ${JSON.stringify(recentChat.map(c => `${c.role}: ${c.parts[0].text?.substring(0, 100)}...`))}
     `;
 
-    const prompt = `Based on the user's health profile, generate a "Personalized Gout Risk Advisor" for today in Korean.
+    const prompt = `Based on the user's health profile, generate a "Personalized Gout Risk Advisor" for today in English.
     The output must be structured exactly as follows, with each section on a new line:
-    RISK_LEVEL: [오늘의 위험도를 '낮음', '주의', 또는 '높음' 중 하나로 평가]
-    SUMMARY: [위험도를 평가한 핵심 이유를 한 문장으로 요약]
-    FORECAST: [오늘 실천할 수 있는 1-2가지의 구체적이고 실행 가능한 조언을 제시. 긍정적이고 지지하는 어조를 사용.]
+    RISK_LEVEL: [Assess today's risk as 'Low', 'Moderate', or 'High']
+    SUMMARY: [Summarize the key reasons for the risk assessment in one sentence]
+    FORECAST: [Provide 1-2 specific, actionable pieces of advice for today. Use a positive and supportive tone.]
 
-    Analyze patterns, including potential correlations with 'life_event' logs. For example, if a user frequently logs 'poor sleep' or 'high stress' before a symptom flare-up, mention this as a possible personal trigger in the forecast. If fluid intake is low and they ate red meat, the risk is '주의' or '높음'. If they missed medication, risk increases. If they are eating well and staying hydrated, risk is '낮음'.
+    Analyze patterns. If a symptom log includes high pain (>6) along with 'swelling' or 'redness', the risk is automatically 'High'. For example, if a user frequently logs 'poor sleep' or 'high stress' (in wellness logs) before a symptom flare-up, mention this as a possible personal trigger in the forecast. If hydration is low and they ate red meat, or if there is any alcohol log, the risk is 'Moderate' or 'High'. If they missed medication, risk increases. If they are eating well and staying hydrated, risk is 'Low'.
     Do not give medical advice. Offer gentle tips linked to their data.
     
     Example Output:
-    RISK_LEVEL: 주의
-    SUMMARY: 어제 저녁 퓨린 함량이 높은 식사를 하셨고, 스트레스가 높은 하루를 보내셨습니다.
-    FORECAST: 오늘은 하루 2리터 이상의 물을 마시는 것을 목표로 해보세요. 스트레스 관리를 위해 가벼운 산책을 추천합니다.
+    RISK_LEVEL: Moderate
+    SUMMARY: You had a high-purine meal yesterday evening and reported a high-stress day.
+    FORECAST: Aim to drink over 2 liters of water today. A light walk is recommended for stress management.
 
     Health Profile Summary:
     ${healthProfileSummary}
@@ -122,46 +127,108 @@ export const generateGoutForecast = async (logs: LogEntry[], chatHistory: ChatMe
         return response.text;
     } catch (error) {
         console.error("Error generating forecast:", error);
-        return "RISK_LEVEL: 알 수 없음\nSUMMARY: 죄송합니다. 현재 예보를 생성할 수 없습니다.\nFORECAST: 잠시 후 다시 시도해 주세요.";
+        const errorString = JSON.stringify(error);
+        if (errorString.includes('429') || errorString.includes('RESOURCE_EXHAUSTED')) {
+             return "RISK_LEVEL: Quota Exceeded\nSUMMARY: API request limit has been exceeded.\nFORECAST: Please try again after a while by pressing the refresh button.";
+        }
+        return "RISK_LEVEL: Error\nSUMMARY: Sorry, we couldn't generate a forecast at this time.\nFORECAST: Please try again after a while by pressing the refresh button.";
     }
 };
+
+export const generateCoachingNote = async (logs: LogEntry[]): Promise<string | null> => {
+    if (logs.length < 1) return null;
+    const recentLogs = logs.slice(0, 15);
+
+    const systemInstructionForCoach = `You are an AI health coach for a gout patient, communicating in English. Your role is to be proactive, supportive, and insightful. Based on the user's recent logs, find ONE interesting pattern, a point of concern, or a positive habit. Craft a short, encouraging, and actionable "Coach's Note" of 1-2 sentences.
+
+**Your Goal:**
+- **Be Specific:** Refer to specific data points (e.g., "hitting your water goal 3 days in a row," "the high stress level logged yesterday").
+- **Be Insightful:** Don't just state facts. Connect the dots for the user (e.g., link stress to symptoms).
+- **Be Action-Oriented:** Offer a simple, concrete suggestion.
+- **Be Positive:** Frame your message with encouragement, even when pointing out areas for improvement.
+- **Be Concise:** The message must be short and easy to read.
+
+**What to AVOID:**
+- Do NOT repeat the general risk level (e.g., "Your risk today is Moderate"). This is handled elsewhere.
+- Do NOT sound like a robot. Use a warm, human-like tone.
+- Do NOT give medical advice.
+
+**Example Scenarios:**
+- **Positive Reinforcement:** If the user has been consistently logging hydration, praise them. "You've been so consistent with your water intake the last few days! That's one of the best habits for managing gout. Keep it up!"
+- **Gentle Nudge:** If logs show high-purine food followed by a symptom, gently point it out. "It looks like you logged a flare-up this morning after your dinner last night. It might be helpful to keep observing the connection between your diet and symptoms."
+- **Lifestyle Connection:** If high stress is logged, suggest a coping mechanism. "I noticed you had a stressful day yesterday. How about taking a short walk today to clear your mind?"
+
+**User's Recent Logs:**
+${JSON.stringify(recentLogs)}
+`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: "Generate a coach's note for the user.",
+            config: {
+                systemInstruction: systemInstructionForCoach,
+                temperature: 0.9,
+            },
+        });
+        return response.text;
+    } catch (error) {
+        console.error("Error generating coaching note:", error);
+        return null;
+    }
+};
+
 
 const mealSchema = {
     type: Type.OBJECT,
     properties: {
-        mealDescription: { type: Type.STRING, description: "AI가 식별한 음식에 대한 요약 설명 (한국어). 텍스트로 분석 요청 시에는 사용자가 입력한 원본 설명을 사용해야 합니다." },
-        totalPurineScore: { type: Type.NUMBER, description: "식단 전체의 퓨린 위험도를 0에서 100 사이의 점수로 평가. 높을수록 위험." },
-        overallRiskLevel: { type: Type.STRING, enum: ['낮음', '주의', '높음'], description: "종합적인 퓨린 위험도 등급" },
-        overallSummary: { type: Type.STRING, description: "점수와 등급에 대한 핵심적인 요약 설명" },
+        mealName: { type: Type.STRING, description: "A short, concise name for the meal (e.g., 'Steak Dinner', 'Chicken Salad'). This will be used as a title the user can edit." },
+        mealDescription: { type: Type.STRING, description: "A detailed description of the meal, including all components identified by the AI." },
+        totalPurineScore: { type: Type.NUMBER, description: "An overall purine risk score for the meal, from 0 to 100. Higher is riskier." },
+        overallRiskLevel: { type: Type.STRING, enum: ['Low', 'Moderate', 'High'], description: "The overall purine risk rating." },
+        overallSummary: { type: Type.STRING, description: "A key summary explaining the score and rating." },
         items: {
             type: Type.ARRAY,
             items: {
                 type: Type.OBJECT,
                 properties: {
-                    foodName: { type: Type.STRING, description: "분석된 개별 음식의 이름" },
-                    purineLevel: { type: Type.STRING, enum: ['낮음', '중간', '높음', '매우 높음'], description: "개별 음식의 퓨린 함량 등급" },
-                    purineAmount: { type: Type.STRING, description: "100g당 퓨린 함량 추정치 (예: '50-100mg')" },
-                    explanation: { type: Type.STRING, description: "해당 등급인 이유에 대한 간략한 설명" },
+                    foodName: { type: Type.STRING, description: "The name of the individual food item analyzed." },
+                    purineLevel: { type: Type.STRING, enum: ['Low', 'Moderate', 'High', 'Very High'], description: "The purine content rating of the individual item." },
+                    purineAmount: { type: Type.STRING, description: "An estimated purine amount per 100g (e.g., '50-100mg')." },
+                    explanation: { type: Type.STRING, description: "A brief explanation for why it received that rating." },
                 },
                 required: ['foodName', 'purineLevel', 'purineAmount', 'explanation']
             }
         },
-        recommendations: { type: Type.STRING, description: "식단을 더 건강하게 만들기 위한 구체적이고 실행 가능한 조언" },
+        recommendations: { type: Type.STRING, description: "Specific, actionable advice on how to make the meal healthier." },
         alternatives: {
             type: Type.ARRAY,
             items: { type: Type.STRING },
-            description: "식단에서 퓨린 함량이 가장 높은 음식을 대체할 만한 더 안전한 식품 2-3가지 제안"
+            description: "Suggest 2-3 safer alternatives to the highest-purine items in the meal."
         },
+        dailyImpactAnalysis: { type: Type.STRING, description: "A personalized analysis of how this meal would impact the user's daily purine goal, considering their current intake. This helps them decide whether to eat it." },
     },
-    required: ['mealDescription', 'totalPurineScore', 'overallRiskLevel', 'overallSummary', 'items', 'recommendations', 'alternatives']
+    required: ['mealName', 'mealDescription', 'totalPurineScore', 'overallRiskLevel', 'overallSummary', 'items', 'recommendations', 'alternatives']
 };
 
 
-export const analyzeMealFromImage = async (base64Data: string, mimeType: string): Promise<Omit<MealAnalysis, 'id'> | null> => {
-    const systemInstructionForFood = "You are a nutritional expert specializing in gout, communicating in Korean. The user will provide an image of a meal. Identify the food items in the image and provide a comprehensive purine content analysis. The `mealDescription` field in your JSON response should be a summary of the food you identified. You MUST respond in Korean, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
+export const analyzeMealFromImage = async (base64Data: string, mimeType: string, userText?: string, context?: { dailyPurineGoal: number; currentPurineIntake: number; }): Promise<Omit<MealAnalysis, 'id'> | null> => {
+    const systemInstructionForFood = "You are a nutritional expert specializing in gout, communicating in English. The user will provide an image of a meal, and may include additional text for context. Identify the food items and provide a comprehensive purine content analysis. The `mealName` field should be a short, concise title for the meal, and the `mealDescription` field should be a detailed summary of all food items you identified. You MUST respond in English, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
+
+    const basePrompt = "Please analyze the purine content of the meal in this image for a gout patient.";
+    const userTextPrompt = userText ? ` The user provided this additional information: "${userText}". Please use this to improve the accuracy of your analysis.` : "";
+    const formattingInstruction = " For `mealName`, provide a short title. For `mealDescription`, provide a detailed description of the identified food items.";
+    
+    let contextPrompt = "";
+    if (context) {
+        contextPrompt = `\n\n[Important Personalization Context] The user's current status is:
+- Daily purine score goal: ${context.dailyPurineGoal}
+- Purine score consumed so far today: ${context.currentPurineIntake}
+Based on this, populate the 'dailyImpactAnalysis' field with a specific analysis of how eating this meal would affect their daily goal. For example, explain if it would exceed their goal or if they still have room, and provide advice accordingly.`;
+    }
 
     const promptParts = [
-        { text: "통풍 환자를 위해 이 이미지에 있는 식단의 퓨린 함량을 분석해 주세요. 이미지에 있는 음식을 식별하여 `mealDescription` 필드에 요약 정보를 기입해 주세요." },
+        { text: `${basePrompt}${userTextPrompt}${formattingInstruction}${contextPrompt}` },
         {
             inlineData: {
                 mimeType: mimeType,
@@ -190,10 +257,20 @@ export const analyzeMealFromImage = async (base64Data: string, mimeType: string)
     }
 };
 
-export const analyzeMealFromText = async (description: string): Promise<Omit<MealAnalysis, 'id'> | null> => {
-    const systemInstructionForFood = "You are a nutritional expert specializing in gout, communicating in Korean. The user will provide a text description of a meal. Identify the food items from the text and provide a comprehensive purine content analysis. The `mealDescription` field in your JSON response should be the original user-provided description. You MUST respond in Korean, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
+export const analyzeMealFromText = async (description: string, context?: { dailyPurineGoal: number; currentPurineIntake: number; }): Promise<Omit<MealAnalysis, 'id'> | null> => {
+    const systemInstructionForFood = "You are a nutritional expert specializing in gout, communicating in English. The user will provide a text description of a meal. Identify the food items from the text and provide a comprehensive purine content analysis. The `mealName` field should be a short, concise title for the meal, and the `mealDescription` field should be a detailed summary. You MUST respond in English, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
     
-    const prompt = `통풍 환자를 위해 다음 식단의 퓨린 함량을 분석해 주세요: "${description}"`;
+    const basePrompt = `Please analyze the purine content of the following meal for a gout patient: "${description}"`;
+
+    let contextPrompt = "";
+    if (context) {
+        contextPrompt = `\n\n[Important Personalization Context] The user's current status is:
+- Daily purine score goal: ${context.dailyPurineGoal}
+- Purine score consumed so far today: ${context.currentPurineIntake}
+Based on this, populate the 'dailyImpactAnalysis' field with a specific analysis of how eating this meal would affect their daily goal. For example, explain if it would exceed their goal or if they still have room, and provide advice accordingly.`;
+    }
+    
+    const prompt = `${basePrompt}${contextPrompt}`;
     
     try {
         const response = await ai.models.generateContent({
@@ -207,8 +284,6 @@ export const analyzeMealFromText = async (description: string): Promise<Omit<Mea
         });
         const jsonString = response.text.trim();
         const data = JSON.parse(jsonString);
-        // Ensure the original description is used, as requested by the system prompt.
-        data.mealDescription = description;
         return data as Omit<MealAnalysis, 'id'>;
     } catch (error) {
         console.error("Error getting meal analysis from text:", error);
@@ -216,43 +291,17 @@ export const analyzeMealFromText = async (description: string): Promise<Omit<Mea
     }
 };
 
-export const generateMealIdeas = async (): Promise<string[] | null> => {
-    const systemInstructionForIdeas = "You are a creative chef and nutritionist specializing in gout-friendly cuisine. Your task is to provide delicious and safe meal ideas for a user managing gout. Respond only with a JSON array of strings, with each string being a distinct meal idea. Do not include markdown. The response must be in Korean.";
-    
-    const prompt = "통풍 환자를 위한 건강하고 맛있는 식단 아이디어를 아침, 점심, 저녁 각각 2가지씩, 총 6가지를 추천해주세요. 예를 들어 '현미밥과 두부 된장찌개'처럼 구체적인 메뉴 이름으로 제안해주세요.";
-
-    try {
-        const response = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-                systemInstruction: systemInstructionForIdeas,
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                },
-            },
-        });
-        const jsonString = response.text.trim();
-        return JSON.parse(jsonString) as string[];
-    } catch (error) {
-        console.error("Error generating meal ideas:", error);
-        return null;
-    }
-};
-
 export const generateMealComparison = async (meals: MealAnalysis[]): Promise<string | null> => {
     if (meals.length < 2) return null;
-    const systemInstructionForComparison = "You are a gout management expert and nutritionist, communicating in Korean. The user will provide data for two or more meals. Your task is to compare them and provide a clear, concise recommendation for which meal is a better choice for a gout patient. Explain the 'why' behind your recommendation, referencing purine scores and key ingredients. Be encouraging and supportive.";
+    const systemInstructionForComparison = "You are a gout management expert and nutritionist, communicating in English. The user will provide data for two or more meals. Your task is to compare them and provide a clear, concise recommendation for which meal is a better choice for a gout patient. Explain the 'why' behind your recommendation, referencing purine scores and key ingredients. Be encouraging and supportive.";
     
     const mealSummaries = meals.map(m => ({
-        description: m.mealDescription,
+        description: m.mealName,
         purineScore: m.totalPurineScore,
         riskLevel: m.overallRiskLevel,
     }));
 
-    const prompt = `통풍 환자를 위해 다음 식단들을 비교 분석하고, 어떤 것이 더 나은 선택인지 명확한 이유와 함께 추천해주세요. 답변은 한두 문단의 짧고 이해하기 쉬운 요약으로 제공해주세요.\n\n[비교할 식단]\n${JSON.stringify(mealSummaries, null, 2)}`;
+    const prompt = `For a gout patient, please compare the following meals and recommend the better choice with a clear explanation. Provide the answer as a short, easy-to-understand summary of one or two paragraphs.\n\n[Meals to Compare]\n${JSON.stringify(mealSummaries, null, 2)}`;
     
     try {
         const response = await ai.models.generateContent({
@@ -266,6 +315,174 @@ export const generateMealComparison = async (meals: MealAnalysis[]): Promise<str
         return response.text;
     } catch (error) {
         console.error("Error generating meal comparison:", error);
-        return "죄송합니다, 식단 비교 분석 중 오류가 발생했습니다.";
+        return "Sorry, an error occurred while comparing the meals.";
+    }
+};
+
+const mealPlanSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            mealName: { type: Type.STRING, description: "The name of the recommended meal (e.g., 'Tofu and Chicken Breast Stir-fry')." },
+            description: { type: Type.STRING, description: "A brief, appealing description of the meal." },
+            estimatedPurineScore: { type: Type.NUMBER, description: "The estimated purine score of the meal (0-100)." },
+            riskLevel: { type: Type.STRING, enum: ['Low', 'Moderate', 'High'], description: "The estimated purine risk level." },
+            ingredients: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "A list of the main ingredients needed for the meal."
+            },
+            recipe: { type: Type.STRING, description: "A simple, easy-to-follow recipe." }
+        },
+        required: ['mealName', 'description', 'estimatedPurineScore', 'riskLevel', 'ingredients', 'recipe']
+    }
+};
+
+export const generateMealPlan = async (prompt: string): Promise<PlannedMeal[] | null> => {
+    const systemInstructionForPlanner = "You are an expert nutritionist and chef specializing in gout-friendly diets, communicating in English. Your task is to generate creative, delicious, and low-purine meal plans based on the user's request. Consider any ingredients the user mentions they have. The meal plans must be practical and easy to follow. You MUST respond in English, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstructionForPlanner,
+                responseMimeType: "application/json",
+                responseSchema: mealPlanSchema,
+                temperature: 0.8
+            },
+        });
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString) as PlannedMeal[];
+    } catch (error) {
+        console.error("Error generating meal plan:", error);
+        return null;
+    }
+};
+
+const mealSuggestionSchema = {
+    type: Type.ARRAY,
+    items: {
+        type: Type.OBJECT,
+        properties: {
+            mealName: { type: Type.STRING, description: "The name of the recommended meal." },
+            description: { type: Type.STRING, description: "A brief, appealing description of the meal." },
+            estimatedPurineScore: { type: Type.NUMBER, description: "The estimated purine score of the meal (0-100)." },
+            riskLevel: { type: Type.STRING, enum: ['Low', 'Moderate', 'High'], description: "The estimated purine risk level." },
+            keyIngredients: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING },
+                description: "A list of key ingredients in the meal."
+            },
+        },
+        required: ['mealName', 'description', 'estimatedPurineScore', 'riskLevel', 'keyIngredients']
+    }
+};
+
+export const generateMealSuggestions = async (prompt: string): Promise<MealSuggestion[] | null> => {
+    const systemInstructionForSuggestion = "You are an expert nutritionist specializing in gout-friendly diets, communicating in English. Your task is to provide 3-5 gout-friendly meal suggestions based on the user's query. The suggestions should be diverse and practical. You MUST respond in English, following the requested JSON schema precisely. Do not include markdown or any other formatting.";
+    
+    const fullPrompt = `Recommend some meal ideas for a gout patient. User's request: "${prompt}"`;
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: fullPrompt,
+            config: {
+                systemInstruction: systemInstructionForSuggestion,
+                responseMimeType: "application/json",
+                responseSchema: mealSuggestionSchema,
+                temperature: 0.8
+            },
+        });
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString) as MealSuggestion[];
+    } catch (error) {
+        console.error("Error generating meal suggestions:", error);
+        return null;
+    }
+};
+
+
+const healthReportSchema = {
+    type: Type.OBJECT,
+    properties: {
+        overallSummary: { type: Type.STRING, description: "A 1-2 sentence summary of the most important insights found in the user's health data." },
+        keyFindings: {
+            type: Type.ARRAY,
+            description: "A list of the most important, actionable patterns or correlations discovered in the data.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING, description: "A concise title for the finding (e.g., 'Link Between Stress and Flares')." },
+                    finding: { type: Type.STRING, description: "A detailed explanation of the pattern found." },
+                    evidence: { type: Type.STRING, description: "A summary of the data evidence that supports this pattern (e.g., 'Your last 3 flare-ups were preceded by days with a stress level of 4 or higher.')." },
+                    recommendation: { type: Type.STRING, description: "A specific piece of advice the user can act on based on this finding." },
+                },
+                required: ["title", "finding", "evidence", "recommendation"]
+            }
+        },
+        positiveHabits: {
+            type: Type.ARRAY,
+            description: "A list of positive habits the user is doing well.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING, description: "The name of the positive habit (e.g., 'Consistent Hydration')." },
+                    description: { type: Type.STRING, description: "An encouraging message praising the habit." }
+                },
+                 required: ["title", "description"]
+            }
+        },
+        areasForImprovement: {
+            type: Type.ARRAY,
+            description: "A list of suggestions for areas the user could improve upon.",
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    title: { type: Type.STRING, description: "The name of the area for improvement (e.g., 'Regular Medication Intake')." },
+                    description: { type: Type.STRING, description: "A gentle, encouraging suggestion for improvement." }
+                },
+                 required: ["title", "description"]
+            }
+        },
+    },
+    required: ["overallSummary", "keyFindings", "positiveHabits", "areasForImprovement"]
+};
+
+export const generateHealthReport = async (logs: LogEntry[]): Promise<HealthReport | null> => {
+    const systemInstructionForReport = "You are a highly intelligent health data analyst AI. Your task is to analyze a user's gout management logs and identify meaningful patterns, correlations, and insights in English. Be empathetic, encouraging, and provide actionable advice. Do not give medical diagnoses. Focus on lifestyle patterns revealed in the data. You MUST respond in English following the requested JSON schema precisely.";
+
+    const prompt = `
+    The following is health log data from a user of a gout management app. Please conduct an in-depth analysis of this data to generate a personalized health report.
+
+    [Analysis Guidelines]
+    1.  **Correlation Analysis:** Look for patterns between symptom logs and other data points (diet, hydration, alcohol, stress, sleep, etc.). For instance, check if flare-ups tend to occur within 24-48 hours after consuming certain foods or alcohol.
+    2.  **Identify Positive Habits:** Find consistently logged good habits (e.g., meeting hydration goals, regular medication intake) and praise the user for them.
+    3.  **Suggest Areas for Improvement:** Gently point out areas that could be improved based on the data (e.g., insufficient water intake, frequent alcohol consumption, missed medications) and offer encouragement.
+    4.  **Wellness Impact:** Analyze the influence of 'wellness' logs (stress, sleep, notes) on the occurrence of pain.
+    5.  **Maintain Objectivity:** Do not provide a medical diagnosis. Focus solely on observations and lifestyle suggestions based on the provided data.
+
+    [User Log Data]
+    ${JSON.stringify(logs, null, 2)}
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstructionForReport,
+                responseMimeType: "application/json",
+                responseSchema: healthReportSchema,
+                temperature: 0.5,
+            },
+        });
+        const jsonString = response.text.trim();
+        return JSON.parse(jsonString) as HealthReport;
+    } catch (error) {
+        console.error("Error generating health report:", error);
+        return null;
     }
 };

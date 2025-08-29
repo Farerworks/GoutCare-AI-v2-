@@ -1,7 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { LogData, Preferences, SymptomData, DietData, MedicationData, LogEntry } from '../types';
+
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { LogData, Preferences, SymptomData, MedicationData, LogEntry, MealAnalysis, PurineIntakeData, MedicationInfo, HydrationData } from '../types';
 import Button from './common/Button';
-import { WaterDropIcon, DietIcon, MedicationIcon, SymptomIcon, ChevronLeftIcon, CloseIcon } from './Icons';
+import Spinner from './common/Spinner';
+import { WaterDropIcon, DietIcon, MedicationIcon, SymptomIcon, ChevronLeftIcon, CloseIcon, SparklesIcon, BookOpenIcon, StarIcon, BeakerIcon } from './Icons';
+import { analyzeMealFromText } from '../services/geminiService';
+import { useI18n } from '../hooks/useI18n';
+import { formatFluid, mlToOz, ozToMl } from '../utils/units';
 
 interface QuickLogDrawerProps {
   isOpen: boolean;
@@ -9,42 +15,186 @@ interface QuickLogDrawerProps {
   onAddLog: (log: LogData, date: Date) => void;
   preferences: Preferences;
   logs: LogEntry[];
+  foodHistory: MealAnalysis[];
+  favoriteMeals: MealAnalysis[];
+  myMedications: MedicationInfo[];
 }
 
-const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddLog, preferences, logs }) => {
+const ActionButton: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
+  <button onClick={onClick} className="flex flex-col items-center justify-center p-4 bg-slate-100 dark:bg-slate-700/50 rounded-xl hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors space-y-2">
+    {icon}
+    <span className="font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+  </button>
+);
+
+const WaterLogForm: React.FC<{ onSubmit: (data: HydrationData) => void, preferences: Preferences }> = ({ onSubmit, preferences }) => {
+    const { t } = useI18n();
+    const [amount, setAmount] = useState<string>(
+        preferences.fluidUnit === 'ml' ? '250' : mlToOz(250).toFixed(0)
+    );
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const numAmount = parseFloat(amount);
+        if (!isNaN(numAmount) && numAmount > 0) {
+            const amountInMl = preferences.fluidUnit === 'oz' ? ozToMl(numAmount) : numAmount;
+            onSubmit({ amount: Math.round(amountInMl) });
+        }
+    };
+    
+    const quickAddValuesMl = [100, 250, 500];
+    
+    const handleQuickAdd = (mlValue: number) => {
+        const displayValue = preferences.fluidUnit === 'ml' ? mlValue : mlToOz(mlValue);
+        setAmount(displayValue.toFixed(0));
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} className="w-full text-center text-3xl font-bold bg-transparent border-b-2 focus:outline-none focus:border-sky-500" autoFocus />
+            <div className="flex space-x-2">
+                {quickAddValuesMl.map(val => 
+                    <Button key={val} type="button" variant="secondary" onClick={() => handleQuickAdd(val)} className="flex-1">
+                        {formatFluid(val, preferences.fluidUnit)}
+                    </Button>
+                )}
+            </div>
+            <Button type="submit" className="w-full">{t('quickLog.addLog')}</Button>
+        </form>
+    );
+};
+
+const QuickSymptomForm: React.FC<{ onSubmit: (data: SymptomData) => void, logs: LogEntry[] }> = ({ onSubmit, logs }) => {
+    const { t } = useI18n();
+    const [painLevel, setPainLevel] = useState(5);
+    const [location, setLocation] = useState('');
+    const locationSuggestions = useMemo(() => [...new Set(logs.filter(l => l.type === 'symptom').map(l => (l.data as SymptomData).location))], [logs]);
+    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSubmit({ location, painLevel, symptoms: [] }); };
+    return (
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <div>
+                <label className="block text-sm font-medium mb-1">{t('quickLog.symptom.locationLabel')}</label>
+                <input type="text" value={location} onChange={e => setLocation(e.target.value)} list="location-suggestions" placeholder={t('quickLog.symptom.locationPlaceholder')} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border rounded-lg" required />
+                <datalist id="location-suggestions">{locationSuggestions.map(l => <option key={l} value={l} />)}</datalist>
+            </div>
+            <div>
+                <label className="block text-sm font-medium mb-1">{t('quickLog.symptom.painLevelLabel')}: {painLevel}</label>
+                <input type="range" min="0" max="10" value={painLevel} onChange={e => setPainLevel(Number(e.target.value))} className="w-full" />
+            </div>
+            <Button type="submit" className="w-full">{t('quickLog.addLog')}</Button>
+        </form>
+    );
+};
+
+const QuickMedicationForm: React.FC<{ onSubmit: (data: MedicationData) => void; logs: LogEntry[]; myMedications: MedicationInfo[] }> = ({ onSubmit, myMedications }) => {
+    const { t } = useI18n();
+    const [name, setName] = useState(myMedications[0]?.name || '');
+    const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); if (name) onSubmit({ name, intakeTime: new Date().toISOString(), timeOfDay: 'morning' }); };
+    return (
+        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            <select value={name} onChange={e => setName(e.target.value)} className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-700 border rounded-lg">
+                {myMedications.map(med => <option key={med.id} value={med.name}>{med.name}</option>)}
+            </select>
+            <Button type="submit" className="w-full">{t('quickLog.medication.logIntake')}</Button>
+        </form>
+    );
+};
+
+const QuickSmartDietForm: React.FC<{ onSubmit: (data: PurineIntakeData) => void; history: MealAnalysis[]; favorites: MealAnalysis[] }> = ({ onSubmit, history, favorites }) => {
+    const { t } = useI18n();
+    const [text, setText] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!text.trim()) return;
+        setIsLoading(true);
+        setError('');
+        const result = await analyzeMealFromText(text.trim());
+        if (result) {
+            onSubmit({ ...result, id: `${Date.now()}`, timeOfDay: 'snack' });
+        } else {
+            setError(t('errors.aiAnalysisFailed'));
+        }
+        setIsLoading(false);
+    };
+
+    const handleQuickAdd = (meal: MealAnalysis) => {
+        onSubmit({ ...meal, timeOfDay: 'snack' });
+    };
+
+    return (
+        <div className="p-4 space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-2">
+                <textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder={t('quickLog.diet.placeholder')} className="w-full p-2 bg-slate-50 dark:bg-slate-700 border rounded-lg" />
+                <Button type="submit" disabled={isLoading} className="w-full">{isLoading ? <Spinner /> : <><SparklesIcon className="w-5 h-5 mr-2" /> {t('quickLog.diet.analyzeAndLog')}</>}</Button>
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+            </form>
+            <div className="space-y-2">
+                <h3 className="font-semibold text-sm text-slate-600 dark:text-slate-400">{t('quickLog.diet.favoritesRecents')}</h3>
+                <div className="flex flex-wrap gap-2">
+                    {favorites.slice(0, 2).map(meal => <button key={meal.id} onClick={() => handleQuickAdd(meal)} className="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/50 rounded-full text-sm flex items-center"><StarIcon className="w-4 h-4 mr-1 text-yellow-500"/>{meal.mealName}</button>)}
+                    {history.slice(0, 3).map(meal => <button key={meal.id} onClick={() => handleQuickAdd(meal)} className="px-2 py-1 bg-slate-200 dark:bg-slate-600 rounded-full text-sm flex items-center"><BookOpenIcon className="w-4 h-4 mr-1"/>{meal.mealName}</button>)}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddLog, preferences, logs, foodHistory, favoriteMeals, myMedications }) => {
+  const { t } = useI18n();
   const [view, setView] = useState<'main' | 'water' | 'diet' | 'medication' | 'symptom'>('main');
 
   useEffect(() => {
     if (!isOpen) {
-      // Reset view after closing animation
       const timer = setTimeout(() => setView('main'), 300);
       return () => clearTimeout(timer);
     }
   }, [isOpen]);
 
-  const handleAddLog = (logData: Omit<LogData, 'type'>, type: LogData['type']) => {
-    onAddLog({ type, ...logData } as LogData, new Date());
+  const handleAddLog = (logData: LogData) => {
+    onAddLog(logData, new Date());
+    onClose();
   };
+
+  const titles = {
+      main: t('quickLog.title'),
+      water: t('quickLog.hydration.title'),
+      diet: t('quickLog.diet.title'),
+      medication: t('quickLog.medication.title'),
+      symptom: t('quickLog.symptom.title'),
+  };
+  
+  const mainViewActions = [
+      { id: 'water', icon: <WaterDropIcon className="w-8 h-8 text-sky-500" />, label: t('quickLog.hydration.title') },
+      { id: 'diet', icon: <BeakerIcon className="w-8 h-8 text-teal-500" />, label: t('quickLog.diet.title') },
+      { id: 'medication', icon: <MedicationIcon className="w-8 h-8 text-indigo-500" />, label: t('quickLog.medication.title') },
+      { id: 'symptom', icon: <SymptomIcon className="w-8 h-8 text-red-500" />, label: t('quickLog.symptom.title') },
+  ];
 
   const renderContent = () => {
     switch (view) {
       case 'main':
         return (
           <div className="grid grid-cols-2 gap-4">
-            <ActionButton icon={<WaterDropIcon className="w-8 h-8 text-sky-500" />} label="수분 섭취" onClick={() => setView('water')} />
-            <ActionButton icon={<DietIcon className="w-8 h-8 text-amber-500" />} label="식단" onClick={() => setView('diet')} />
-            <ActionButton icon={<MedicationIcon className="w-8 h-8 text-indigo-500" />} label="약물" onClick={() => setView('medication')} />
-            <ActionButton icon={<SymptomIcon className="w-8 h-8 text-red-500" />} label="증상" onClick={() => setView('symptom')} />
+             {mainViewActions.map(action => (
+                <ActionButton key={action.id} icon={action.icon} label={action.label} onClick={() => setView(action.id as any)} />
+            ))}
           </div>
         );
       case 'water':
-        return <WaterLogForm onSubmit={handleAddLog} />;
+        return <WaterLogForm onSubmit={(data) => handleAddLog({ type: 'hydration', data })} preferences={preferences} />;
       case 'diet':
-        return <QuickDietOrMedicationForm type="diet" logs={logs} onSubmit={(data) => handleAddLog({ data }, 'diet')} />;
+        return <QuickSmartDietForm 
+            history={foodHistory} 
+            favorites={favoriteMeals} 
+            onSubmit={(data) => handleAddLog({ type: 'purine_intake', data })} 
+        />;
        case 'medication':
-        return <QuickDietOrMedicationForm type="medication" logs={logs} onSubmit={(data) => handleAddLog({ data }, 'medication')} />;
+        return <QuickMedicationForm logs={logs} myMedications={myMedications} onSubmit={(data) => handleAddLog({ type: 'medication', data })} />;
       case 'symptom':
-        return <QuickSymptomForm logs={logs} onSubmit={(data) => handleAddLog({ data }, 'symptom')} />;
+        return <QuickSymptomForm logs={logs} onSubmit={(data) => handleAddLog({ type: 'symptom', data })} />;
       default:
         return null;
     }
@@ -55,200 +205,29 @@ const QuickLogDrawer: React.FC<QuickLogDrawerProps> = ({ isOpen, onClose, onAddL
       <div
         className={`fixed inset-0 bg-black z-40 transition-opacity duration-300 ${isOpen ? 'bg-opacity-60' : 'bg-opacity-0 pointer-events-none'}`}
         onClick={onClose}
+        aria-hidden="true"
       />
       <div
         className={`fixed bottom-0 left-0 right-0 z-50 bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl transition-transform duration-300 ease-in-out ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="quick-log-title"
       >
-        <div className="p-4 pt-5">
-            <div className="flex items-center justify-between mb-4">
-                {view !== 'main' ? (
-                    <button onClick={() => setView('main')} className="p-2 -ml-2 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200">
-                        <ChevronLeftIcon className="w-6 h-6" />
-                    </button>
-                ) : <div className="w-10"></div> }
-                 <h3 className="text-lg font-bold text-center text-slate-800 dark:text-slate-200">
-                    빠른 기록
-                </h3>
-                <button onClick={onClose} className="p-2 -mr-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
-                    <CloseIcon className="w-6 h-6" />
-                </button>
-            </div>
-          {renderContent()}
+        <header className="flex items-center justify-between p-2 border-b border-slate-200 dark:border-slate-700">
+          <button onClick={() => setView('main')} className={`p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-opacity ${view === 'main' ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+            <ChevronLeftIcon />
+          </button>
+          <h2 id="quick-log-title" className="text-lg font-bold text-slate-800 dark:text-slate-100">{titles[view]}</h2>
+          <button onClick={onClose} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
+            <CloseIcon />
+          </button>
+        </header>
+        <div className="p-4">
+            {renderContent()}
         </div>
       </div>
     </>
   );
 };
-
-const ActionButton: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void; }> = ({ icon, label, onClick }) => (
-  <button
-    onClick={onClick}
-    className="flex flex-col items-center justify-center p-4 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-sky-100 dark:hover:bg-sky-900/50 border-2 border-transparent hover:border-sky-500 transition-all h-28"
-  >
-    {icon}
-    <span className="mt-2 font-semibold text-slate-700 dark:text-slate-200">{label}</span>
-  </button>
-);
-
-
-const WaterLogForm: React.FC<{ onSubmit: (logData: { data: { fluidIntake: number } }, type: 'wellness') => void }> = ({ onSubmit }) => {
-    const quickAmounts = [250, 500, 750];
-    const [customAmount, setCustomAmount] = useState('');
-
-    const handleQuickAdd = (amount: number) => {
-        onSubmit({ data: { fluidIntake: amount } }, 'wellness');
-    };
-    
-    const handleCustomSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const amount = parseInt(customAmount, 10);
-        if (amount > 0) {
-            onSubmit({ data: { fluidIntake: amount } }, 'wellness');
-        }
-    }
-
-    return (
-        <div className="space-y-4 p-2">
-            <div className="grid grid-cols-3 gap-3">
-                {quickAmounts.map(amount => (
-                    <Button key={amount} onClick={() => handleQuickAdd(amount)} variant="secondary" size="lg" className="h-20 text-xl">
-                        {amount}ml
-                    </Button>
-                ))}
-            </div>
-            <form onSubmit={handleCustomSubmit} className="flex items-center gap-2">
-                <input
-                    type="number"
-                    value={customAmount}
-                    onChange={(e) => setCustomAmount(e.target.value)}
-                    placeholder="직접 입력 (ml)"
-                    className="flex-grow w-full px-4 py-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
-                />
-                <Button type="submit" size="md">저장</Button>
-            </form>
-        </div>
-    );
-};
-
-const AutocompleteInput: React.FC<{
-    value: string;
-    onChange: (value: string) => void;
-    suggestions: string[];
-    placeholder?: string;
-    required?: boolean;
-}> = ({ value, onChange, suggestions, placeholder, required }) => {
-    const [showSuggestions, setShowSuggestions] = useState(false);
-
-    const filteredSuggestions = useMemo(() =>
-        suggestions.filter(s => s.toLowerCase().includes(value.toLowerCase()) && s.toLowerCase() !== value.toLowerCase()),
-        [suggestions, value]
-    );
-
-    return (
-        <div className="relative">
-            <input
-                type="text"
-                value={value}
-                onChange={e => onChange(e.target.value)}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                placeholder={placeholder}
-                required={required}
-                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg"
-            />
-            {showSuggestions && filteredSuggestions.length > 0 && (
-                <ul className="absolute bottom-full mb-1 z-20 w-full bg-white dark:bg-slate-600 border border-slate-300 dark:border-slate-500 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                    {filteredSuggestions.map((suggestion, index) => (
-                        <li
-                            key={index}
-                            onClick={() => {
-                                onChange(suggestion);
-                                setShowSuggestions(false);
-                            }}
-                            className="px-4 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-500"
-                        >
-                            {suggestion}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-};
-
-const QuickDietOrMedicationForm: React.FC<{ type: 'medication' | 'diet', logs: LogEntry[], onSubmit: (data: MedicationData | DietData) => void }> = ({ type, logs, onSubmit }) => {
-    const [name, setName] = useState('');
-    
-    const suggestions = useMemo(() => {
-        if (type === 'medication') {
-            return [...new Set(logs.filter(l => l.type === 'medication').map(l => (l.data as MedicationData).name))];
-        } else {
-            return [...new Set(logs.filter(l => l.type === 'diet').map(l => (l.data as DietData).description))];
-        }
-    }, [logs, type]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!name.trim()) return;
-
-        if (type === 'medication') {
-            onSubmit({ name, timeOfDay: 'morning', intakeTime: new Date().toISOString() });
-        } else {
-            onSubmit({ description: name, timeOfDay: 'snack' });
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4 p-2">
-             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">{type === 'medication' ? '약물 이름' : '음식/음료 설명'}</label>
-                 <AutocompleteInput 
-                    value={name}
-                    onChange={setName}
-                    suggestions={suggestions}
-                    placeholder={type === 'medication' ? '예: 콜히친' : '예: 오렌지 주스'}
-                    required
-                />
-            </div>
-            <Button type="submit" size="lg" className="w-full">기록 저장</Button>
-        </form>
-    );
-};
-
-const QuickSymptomForm: React.FC<{ logs: LogEntry[], onSubmit: (data: SymptomData) => void }> = ({ logs, onSubmit }) => {
-    const [painLevel, setPainLevel] = useState(5);
-    const [location, setLocation] = useState('');
-    
-    const commonLocations = ["엄지발가락", "발목", "무릎"];
-    const locationSuggestions = useMemo(() => 
-        [...new Set(logs.filter(l => l.type === 'symptom').map(l => (l.data as SymptomData).location))]
-    , [logs]);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!location.trim()) return;
-        onSubmit({ painLevel, location, symptoms: [] });
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4 p-2">
-            <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">통증 부위</label>
-                <AutocompleteInput value={location} onChange={setLocation} suggestions={locationSuggestions} placeholder="예: 오른쪽 엄지발가락" required />
-                 <div className="flex flex-wrap gap-2 mt-2">
-                    {commonLocations.map(loc => (
-                        <button key={loc} type="button" onClick={() => setLocation(loc)} className="px-2.5 py-1 text-xs bg-slate-200 dark:bg-slate-600 rounded-full hover:bg-sky-200 dark:hover:bg-sky-700">{loc}</button>
-                    ))}
-                </div>
-            </div>
-             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">통증 강도: <span className="font-bold">{painLevel}</span>/10</label>
-                <input type="range" min="0" max="10" value={painLevel} onChange={e => setPainLevel(Number(e.target.value))} className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-600"/>
-            </div>
-            <Button type="submit" size="lg" className="w-full">기록 저장</Button>
-        </form>
-    );
-};
-
 
 export default QuickLogDrawer;

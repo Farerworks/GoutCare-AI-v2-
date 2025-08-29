@@ -1,4 +1,6 @@
-export type LogType = 'symptom' | 'medication' | 'diet' | 'wellness' | 'life_event' | 'purine_intake';
+
+
+export type LogType = 'symptom' | 'medication' | 'wellness' | 'purine_intake' | 'hydration' | 'alcohol';
 
 // Data structures for each log type
 export interface SymptomData {
@@ -6,13 +8,24 @@ export interface SymptomData {
   painLevel: number; // 0-10
   symptoms: ('swelling' | 'redness' | 'warmth')[];
   notes?: string;
+  photo?: string; // base64 encoded image
 }
 
 export interface MedicationData {
   name: string;
+  dosage?: string;
+  unit?: string;
   timeOfDay: 'morning' | 'lunch' | 'dinner' | 'bedtime';
   intakeTime: string; // ISO String
   notes?: string;
+  photo?: string; // base64 encoded image
+}
+
+export interface MedicationInfo {
+  id: string;
+  name: string;
+  dosage?: string;
+  unit?: string;
   photo?: string; // base64 encoded image
 }
 
@@ -23,49 +36,78 @@ export interface DietData {
   photo?: string; // base64 encoded image
 }
 
+export interface HydrationData {
+  amount: number; // in mL
+  notes?: string;
+}
+
+export interface AlcoholData {
+  type: string; // 'Beer', 'Soju', 'Wine' etc.
+  amount: number; // in mL
+  notes?: string;
+}
+
 export interface WellnessData {
-    fluidIntake?: number; // in mL
     weight?: number; // in kg
     sleepHours?: number; // in hours
     stressLevel?: 1 | 2 | 3 | 4 | 5;
     activity?: string; // e.g., "30 min walk"
-}
-
-export interface LifeEventData {
-    event: string;
+    notes?: string; // For memo integration
 }
 
 // AI Meal Analyzer types
 export interface AnalyzedFoodItem {
   foodName: string;
-  purineLevel: '낮음' | '중간' | '높음' | '매우 높음';
+  purineLevel: 'Low' | 'Moderate' | 'High' | 'Very High';
   purineAmount: string;
   explanation: string;
 }
 
 export interface MealAnalysis {
   id: string; // for history key
+  mealName: string;
   mealDescription: string; // original user query
   totalPurineScore: number; // 0-100
-  overallRiskLevel: '낮음' | '주의' | '높음';
+  overallRiskLevel: 'Low' | 'Moderate' | 'High';
   overallSummary: string;
   items: AnalyzedFoodItem[];
   recommendations: string;
   alternatives: string[];
+  dailyImpactAnalysis?: string;
 }
 
 export interface PurineIntakeData extends MealAnalysis {
     timeOfDay: 'breakfast' | 'lunch' | 'dinner' | 'snack';
 }
 
+// AI Meal Planner type
+export interface PlannedMeal {
+  mealName: string;
+  description: string;
+  estimatedPurineScore: number;
+  riskLevel: 'Low' | 'Moderate' | 'High';
+  ingredients: string[];
+  recipe: string;
+}
+
+// AI Meal Suggestion for Search
+export interface MealSuggestion {
+  mealName: string;
+  description: string;
+  estimatedPurineScore: number;
+  riskLevel: 'Low' | 'Moderate' | 'High';
+  keyIngredients: string[];
+}
+
+
 // Discriminated union for LogEntry
 export type LogData = 
   | { type: 'symptom'; data: SymptomData }
   | { type: 'medication'; data: MedicationData }
-  | { type: 'diet'; data: DietData }
   | { type: 'wellness'; data: WellnessData }
-  | { type: 'life_event'; data: LifeEventData }
-  | { type: 'purine_intake'; data: PurineIntakeData };
+  | { type: 'purine_intake'; data: PurineIntakeData }
+  | { type: 'hydration'; data: HydrationData }
+  | { type: 'alcohol'; data: AlcoholData };
 
 export type LogEntry = {
   id: string;
@@ -104,4 +146,30 @@ export interface Preferences {
 }
 
 // Navigation Type
-export type ActiveView = 'dashboard' | 'calendar' | 'chat' | 'food';
+export type ActiveView = 'dashboard' | 'calendar' | 'chat' | 'food' | 'report';
+
+// AI Health Report Types
+export interface KeyFinding {
+  title: string;
+  finding: string;
+  evidence: string;
+  recommendation: string;
+}
+
+export interface ReportHabit {
+    title: string;
+    description: string;
+}
+
+export interface HealthReport {
+    overallSummary: string;
+    keyFindings: KeyFinding[];
+    positiveHabits: ReportHabit[];
+    areasForImprovement: ReportHabit[];
+}
+
+// AI Coach Note
+export interface CoachingNote {
+    note: string;
+    date: string; // YYYY-MM-DD
+}
